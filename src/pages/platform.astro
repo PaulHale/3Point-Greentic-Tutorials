@@ -4,6 +4,8 @@ import Card from '@/components/ui/Card.astro';
 import FiveLayersCanvas from '@/components/diagrams/FiveLayersCanvas';
 import DataFlowAnimation from '@/components/diagrams/DataFlowAnimation';
 import ComponentAnatomy from '@/components/diagrams/ComponentAnatomy';
+
+const base = import.meta.env.BASE_URL;
 ---
 
 <MarketingLayout
@@ -293,13 +295,13 @@ import ComponentAnatomy from '@/components/diagrams/ComponentAnatomy';
       </p>
       <div class="flex flex-col sm:flex-row gap-4 justify-center">
         <a
-          href="/docs/getting-started/quickstart"
+          href={`${base}docs/getting-started/quickstart`}
           class="px-6 py-3 rounded-lg bg-gradient-to-r from-primary to-primary-glow text-primary-foreground font-medium hover:opacity-90 transition-opacity"
         >
           Get Started
         </a>
         <a
-          href="/docs/architecture/overview"
+          href={`${base}docs/architecture/overview`}
           class="px-6 py-3 rounded-lg border border-border bg-card text-foreground font-medium hover:bg-muted transition-colors"
         >
           Read Architecture Docs

@@ -4,6 +4,8 @@ import Button from '@/components/ui/Button.astro';
 import Card from '@/components/ui/Card.astro';
 import ParticleBackground from '@/components/animation/ParticleBackground';
 import HeroArchitecture from '@/components/diagrams/HeroArchitecture';
+
+const base = import.meta.env.BASE_URL;
 ---
 
 <MarketingLayout
@@ -37,7 +39,7 @@ import HeroArchitecture from '@/components/diagrams/HeroArchitecture';
 
         <!-- CTA Buttons -->
         <div class="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
-          <Button href="/docs/getting-started/quickstart" size="lg" variant="primary">
+          <Button href={`${base}docs/getting-started/quickstart`} size="lg" variant="primary">
             Get Started
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-5 h-5 ml-2">
               <path d="M5 12h14M12 5l7 7-7 7" />
@@ -88,7 +90,7 @@ import HeroArchitecture from '@/components/diagrams/HeroArchitecture';
           <p class="text-muted-foreground mb-4">
             Self-describing WebAssembly modules that execute securely in isolation. LLM, cards, scripts, and more.
           </p>
-          <a href="/docs/architecture/components" class="text-primary hover:underline text-sm font-medium">
+          <a href={`${base}docs/architecture/components`} class="text-primary hover:underline text-sm font-medium">
             Learn more &rarr;
           </a>
         </Card>
@@ -104,7 +106,7 @@ import HeroArchitecture from '@/components/diagrams/HeroArchitecture';
           <p class="text-muted-foreground mb-4">
             Declarative YAML orchestration that wires components together with routing, conditions, and state.
           </p>
-          <a href="/docs/architecture/flows" class="text-primary hover:underline text-sm font-medium">
+          <a href={`${base}docs/architecture/flows`} class="text-primary hover:underline text-sm font-medium">
             Learn more &rarr;
           </a>
         </Card>
@@ -123,7 +125,7 @@ import HeroArchitecture from '@/components/diagrams/HeroArchitecture';
           <p class="text-muted-foreground mb-4">
             Signed, versioned bundles ready for enterprise distribution through the Greentic supply chain.
           </p>
-          <a href="/docs/architecture/packs" class="text-primary hover:underline text-sm font-medium">
+          <a href={`${base}docs/architecture/packs`} class="text-primary hover:underline text-sm font-medium">
             Learn more &rarr;
           </a>
         </Card>
@@ -265,7 +267,7 @@ import HeroArchitecture from '@/components/diagrams/HeroArchitecture';
 
       <div class="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
         <!-- Tutorial 1 -->
-        <a href="/tutorials/demo-1-hello-world" class="group">
+        <a href={`${base}tutorials/demo-1-hello-world`} class="group">
           <Card hover class="p-6 h-full">
             <div class="flex items-start gap-4">
               <div class="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
@@ -284,7 +286,7 @@ import HeroArchitecture from '@/components/diagrams/HeroArchitecture';
         </a>
 
         <!-- Tutorial 2 -->
-        <a href="/tutorials/demo-2-it-support" class="group">
+        <a href={`${base}tutorials/demo-2-it-support`} class="group">
           <Card hover class="p-6 h-full">
             <div class="flex items-start gap-4">
               <div class="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center shrink-0">
@@ -303,7 +305,7 @@ import HeroArchitecture from '@/components/diagrams/HeroArchitecture';
         </a>
 
         <!-- Tutorial 3 -->
-        <a href="/tutorials/demo-3-rag-system" class="group">
+        <a href={`${base}tutorials/demo-3-rag-system`} class="group">
           <Card hover class="p-6 h-full">
             <div class="flex items-start gap-4">
               <div class="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
@@ -336,7 +338,7 @@ import HeroArchitecture from '@/components/diagrams/HeroArchitecture';
         </p>
 
         <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
-          <Button href="/docs/getting-started/quickstart" size="lg" variant="primary">
+          <Button href={`${base}docs/getting-started/quickstart`} size="lg" variant="primary">
             Read the Docs
           </Button>
           <Button

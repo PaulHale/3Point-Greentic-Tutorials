@@ -4,6 +4,8 @@ import Card from '@/components/ui/Card.astro';
 import Badge from '@/components/ui/Badge.astro';
 import { tutorialItems } from '@/lib/navigation';
 
+const base = import.meta.env.BASE_URL;
+
 const tutorials = [
   {
     ...tutorialItems[0],
@@ -44,7 +46,7 @@ const difficultyColors = {
     <div class="space-y-6">
       {
         tutorials.map((tutorial, index) => (
-          <a href={tutorial.href} class="group block">
+          <a href={`${base}${tutorial.href.slice(1)}`} class="group block">
             <Card hover class="p-6">
               <div class="flex items-start gap-6">
                 {/* Number badge */}
@@ -108,7 +110,7 @@ const difficultyColors = {
       </p>
       <div class="flex justify-center gap-4">
         <a
-          href="/docs"
+          href={`${base}docs`}
           class="px-4 py-2 rounded-lg bg-card border border-border hover:bg-muted text-foreground text-sm font-medium transition-colors"
         >
           Read the Docs
