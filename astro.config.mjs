@@ -4,7 +4,8 @@ import mdx from '@astrojs/mdx';
 import tailwind from '@astrojs/tailwind';
 
 export default defineConfig({
-  site: 'https://docs.greentic.ai',
+  site: 'https://paulhale.github.io',
+  base: '/3Point-Greentic-Tutorials',
   integrations: [
     react(),
     mdx({
