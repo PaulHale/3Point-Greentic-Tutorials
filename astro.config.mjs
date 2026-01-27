@@ -5,7 +5,7 @@ import tailwind from '@astrojs/tailwind';
 
 export default defineConfig({
   site: 'https://paulhale.github.io',
-  base: '/3Point-Greentic-Tutorials',
+  base: '/3Point-Greentic-Tutorials/',
   integrations: [
     react(),
     mdx({
