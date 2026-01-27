@@ -32,7 +32,7 @@ const layers: Layer[] = [
     id: 'dev-experience',
     label: 'Developer Experience',
     description: 'Tools for building and testing',
-    items: ['greentic-dev', 'greentic-gui', 'greentic-webchat', 'IDE Plugins'],
+    items: ['greentic-dev', 'greentic-gui', 'greentic-webchat'],
     color: 'hsl(166, 70%, 45%)',
     y: 0,
   },
@@ -143,7 +143,7 @@ export function LayeredArchitecture({ className = '', onLayerClick }: LayeredArc
 
   const layerDescriptions: Record<string, string> = {
     'dev-experience':
-      'The Developer Experience layer provides all the tools developers need to build, test, and debug their digital workers. This includes the CLI, GUI editor, webchat for testing, and IDE plugins for popular editors.',
+      'The Developer Experience layer provides all the tools developers need to build, test, and debug their digital workers. This includes the CLI for command-line workflows, GUI runtime for visual flow interactions, and webchat for testing.',
     'supply-chain':
       'The Supply Chain layer handles the entire lifecycle of packs from build to deployment. Components are compiled, manifests are validated, packs are signed and stored in the catalog, then distributed to runners.',
     runtime:

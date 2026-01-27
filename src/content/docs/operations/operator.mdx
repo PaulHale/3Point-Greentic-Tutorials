@@ -1,0 +1,364 @@
+---
+title: Operator
+description: Greentic Operator for orchestrating local development and demo deployments.
+order: 1
+---
+
+# Operator
+
+The Greentic Operator orchestrates project directories for demos and local development. It manages tenants, teams, access policies, pack discovery, and runtime services.
+
+## Overview
+
+The operator provides:
+
+- **Tenant/team management** — Create and configure tenant hierarchies
+- **Access mapping (.gmap)** — Policy-based flow access control
+- **Pack discovery** — Auto-discover packs and providers
+- **Runtime orchestration** — Start local development services
+- **Demo bundles** — Package portable demos
+
+## Quickstart
+
+### Initialise a Project
+
+```bash
+mkdir my-demo && cd my-demo
+greentic-operator dev init
+```
+
+This creates the standard project structure:
+
+```
+my-demo/
+├── greentic.yaml           # Project configuration
+├── tenants/
+│   └── tenant1/
+│       ├── tenant.gmap     # Tenant access rules
+│       └── teams/
+│           └── team1/
+│               └── team.gmap  # Team access rules
+├── packs/                  # Your pack files
+├── providers/
+│   ├── messaging/          # Messaging provider packs
+│   └── events/             # Event provider packs
+└── state/
+    └── resolved/           # Resolved manifests
+```
+
+### Add Tenants and Teams
+
+```bash
+# Add a tenant
+greentic-operator dev tenant add tenant1
+
+# Add a team to the tenant
+greentic-operator dev team add --tenant tenant1 team1
+```
+
+### Deploy Packs
+
+Drop pack files into the appropriate directories:
+
+```bash
+# Messaging provider packs
+cp my-messaging-provider.gtpack providers/messaging/
+
+# Your application packs
+cp my-app.gtpack packs/
+```
+
+### Sync and Run
+
+```bash
+# Resolve manifests and sync state
+greentic-operator dev sync
+
+# Start the runtime
+greentic-operator dev up --tenant tenant1 --team team1
+
+# View logs
+greentic-operator dev logs
+```
+
+## Access Mapping (.gmap)
+
+Access policies control which flows and nodes are accessible per tenant/team.
+
+### Format
+
+```
+<path> = <policy>
+```
+
+### Paths
+
+| Pattern | Scope |
+|---------|-------|
+| `_` | Default policy |
+| `pack_id` | Entire pack |
+| `pack_id/_` | All flows in pack |
+| `pack_id/flow_id` | Specific flow |
+| `pack_id/flow_id/node_id` | Specific node |
+
+### Policies
+
+| Policy | Description |
+|--------|-------------|
+| `public` | Accessible to all |
+| `forbidden` | Access denied |
+
+### Example
+
+```
+# tenant.gmap
+_ = forbidden                      # Default: deny all
+my-pack = public                   # Allow entire pack
+other-pack/admin-flow = forbidden  # Block specific flow
+```
+
+### Precedence
+
+Team rules override tenant rules:
+
+```
+# tenant.gmap
+my-pack = public
+
+# team.gmap (overrides tenant)
+my-pack/sensitive-flow = forbidden
+```
+
+### CLI Commands
+
+```bash
+# Allow a pack for a tenant
+greentic-operator dev allow --tenant tenant1 --path my-pack
+
+# Forbid a flow for a team
+greentic-operator dev forbid --tenant tenant1 --team team1 --path my-pack/admin-flow
+```
+
+## Domain Auto-Discovery
+
+The operator automatically detects and enables domains based on provider packs:
+
+| Domain | Provider Path | Description |
+|--------|---------------|-------------|
+| `messaging` | `providers/messaging/*.gtpack` | Messaging channels |
+| `events` | `providers/events/*.gtpack` | Event triggers |
+
+### Override in Configuration
+
+```yaml
+# greentic.yaml
+services:
+  messaging:
+    enabled: auto   # auto | true | false
+  events:
+    enabled: auto
+```
+
+## Demo Bundles
+
+### Build a Demo Bundle
+
+```bash
+greentic-operator demo build \
+  --out demo-bundle \
+  --tenant tenant1 \
+  --team team1
+```
+
+This creates a portable bundle:
+
+```
+demo-bundle/
+├── packs/
+├── resolved/
+├── tenants/
+└── manifest.yaml
+```
+
+### Run a Demo Bundle
+
+```bash
+greentic-operator demo up \
+  --bundle demo-bundle \
+  --tenant tenant1 \
+  --team team1
+```
+
+### Modify Bundle Policies
+
+```bash
+# Allow a path in a bundle
+greentic-operator demo allow \
+  --bundle demo-bundle \
+  --tenant tenant1 \
+  --path my-pack
+
+# Forbid a path
+greentic-operator demo forbid \
+  --bundle demo-bundle \
+  --tenant tenant1 \
+  --team team1 \
+  --path my-pack/sensitive-flow
+```
+
+### Send Test Messages
+
+```bash
+# Show required arguments
+greentic-operator demo send \
+  --bundle demo-bundle \
+  --provider telegram \
+  --print-required-args
+
+# Send a message
+greentic-operator demo send \
+  --bundle demo-bundle \
+  --provider telegram \
+  --text "Hello!" \
+  --arg chat_id=123
+```
+
+## Service Configuration
+
+### Demo Service Config
+
+Configure services via YAML:
+
+```yaml
+# demo.yaml
+tenant: demo
+team: default
+services:
+  nats:
+    enabled: true
+    url: "nats://127.0.0.1:4222"
+    spawn:
+      enabled: true
+      binary: "nats-server"
+      args: ["-p", "4222", "-js"]
+  gateway:
+    binary: "gsm-gateway"
+    listen_addr: "127.0.0.1"
+    port: 8080
+  egress:
+    binary: "gsm-egress"
+  subscriptions:
+    msgraph:
+      enabled: true
+      binary: "gsm-msgraph-subscriptions"
+      mode: "poll"
+```
+
+Run with config:
+
+```bash
+greentic-operator demo up --config ./demo/demo.yaml
+```
+
+### Embedded Services
+
+The operator can run gateway, egress, and subscription services in-process:
+
+```bash
+greentic-operator dev embedded --project-root /path/to/project
+```
+
+This starts all services and blocks until `Ctrl+C`. Use `--no-nats` if NATS is already running.
+
+## Local Development Mode
+
+### Enable Dev Mode
+
+Point to your local Greentic workspace:
+
+```bash
+greentic-operator dev on \
+  --root /projects/ai/greentic-ai \
+  --profile debug
+```
+
+### Detect Binaries
+
+```bash
+greentic-operator dev detect \
+  --root /projects/ai/greentic-ai \
+  --profile debug \
+  --dry-run
+```
+
+### Configuration
+
+```yaml
+# greentic.yaml
+dev:
+  mode: auto
+  root: /projects/ai/greentic-ai
+  profile: debug
+  target_dir: null
+  repo_map:
+    greentic-pack: greentic-pack
+    greentic-secrets: greentic-secrets
+    gsm-gateway: gsm-gateway
+
+binaries:
+  greentic-pack: /custom/bin/greentic-pack
+```
+
+### Resolution Order
+
+1. Explicit config path (binaries map or command path)
+2. Dev-mode repo_map under `dev.root`
+3. Fallbacks (`./bin`, `./target/*`, `$PATH`)
+
+### Global Settings
+
+Global dev-mode settings are stored at:
+- Linux: `~/.config/greentic/operator/settings.yaml`
+- macOS: `~/Library/Application Support/greentic/operator/settings.yaml`
+- Windows: `%APPDATA%\greentic\operator\settings.yaml`
+
+```bash
+# View settings
+greentic-operator dev status
+
+# Disable dev mode
+greentic-operator dev off
+```
+
+## CLI Reference
+
+### Dev Commands
+
+| Command | Description |
+|---------|-------------|
+| `dev init` | Initialise project directory |
+| `dev tenant add <name>` | Add a tenant |
+| `dev team add --tenant <t> <name>` | Add a team |
+| `dev sync` | Resolve manifests and sync state |
+| `dev up --tenant <t> --team <team>` | Start runtime |
+| `dev logs` | View runtime logs |
+| `dev allow/forbid` | Edit access policies |
+| `dev on/off` | Enable/disable dev mode |
+| `dev status` | Show dev mode settings |
+| `dev embedded` | Run embedded services |
+
+### Demo Commands
+
+| Command | Description |
+|---------|-------------|
+| `demo build` | Build portable bundle |
+| `demo up` | Run from bundle |
+| `demo allow/forbid` | Edit bundle policies |
+| `demo send` | Send test message |
+| `demo doctor` | Check bundle health |
+
+## Next Steps
+
+- **[Packs](/docs/architecture/packs)** — Pack structure and distribution
+- **[Multi-tenancy](/docs/architecture/multi-tenancy)** — Tenant isolation
+- **[Messaging](/docs/messaging/overview)** — Channel configuration

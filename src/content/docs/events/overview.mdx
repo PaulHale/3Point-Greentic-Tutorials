@@ -1,0 +1,271 @@
+---
+title: Events
+description: Multi-tenant event fabric for Greentic - publish/subscribe, retry handling, and event-driven automation.
+order: 1
+---
+
+# Events
+
+The Greentic Events system provides a multi-tenant event fabric for building event-driven digital workers. It supports publish/subscribe patterns, configurable retry and dead-letter handling, and integrates directly with packs and flows.
+
+## Overview
+
+The event fabric (`greentic-events`) provides:
+
+- **Publish/subscribe API** with topic-to-provider routing
+- **Reliability** — configurable retry/backoff with DLQ publishing
+- **Tenant isolation** — ACLs for topic/tenant allowlists
+- **Observability** — tracing spans and metrics hooks
+- **Pack integration** — reads provider config from packs
+
+## Core Concepts
+
+### Event Envelopes
+
+All events are wrapped in a standard `EventEnvelope` from `greentic-types`:
+
+```rust
+use greentic_events::{EventBusBuilder, SubscriptionOptions};
+use greentic_types::TenantCtx;
+use serde_json::json;
+
+let tenant = TenantCtx::new("dev".try_into()?, "tenant-a".try_into()?);
+
+// Publish with helper (builds envelope for you)
+bus.publish_event(&tenant, "greentic.repo.build.status", json!({
+    "status": "succeeded",
+    "build_id": "b-123",
+})).await?;
+```
+
+### Topic Conventions
+
+Topics follow a hierarchical dotted naming convention:
+
+| Topic Pattern | Description |
+|---------------|-------------|
+| `greentic.repo.build.status` | Build status updates |
+| `greentic.repo.publish.completed` | Pack publish events |
+| `greentic.repo.component.deprecated` | Component deprecation |
+| `greentic.repo.component.recalled` | Component recall notices |
+| `greentic.secrets.put` | Secret created/updated |
+| `greentic.secrets.rotate.completed` | Secret rotation complete |
+
+### Subscriptions
+
+Subscribe to topics using wildcard patterns:
+
+```rust
+use greentic_events::{EventBusBuilder, SubscriptionOptions};
+use futures::StreamExt;
+
+// Subscribe to all repo events
+let mut handle = bus.subscribe(
+    "greentic.repo.*",
+    tenant_ctx,
+    SubscriptionOptions::default()
+).await?;
+
+// Process events
+while let Some(event) = handle.next().await {
+    println!("Topic: {}, Payload: {:?}", event.topic, event.payload);
+}
+```
+
+## Retry and DLQ Handling
+
+The event fabric supports sophisticated retry strategies:
+
+### Retry Strategies
+
+| Strategy | Description |
+|----------|-------------|
+| `fixed` | Constant delay between retries |
+| `exponential` | Exponentially increasing delay |
+| `exponential_with_jitter` | Exponential with random jitter |
+
+### Configuration
+
+Configure retry in pack annotations:
+
+```yaml
+# pack.yaml
+annotations:
+  events.providers.my-provider:
+    dlq_topic: "greentic.dlq.my-provider"
+    retry:
+      max_retries: 3
+      base_delay_ms: 1000
+      max_delay_ms: 30000
+      strategy: exponential_with_jitter
+      retryable_errors:
+        - "timeout"
+        - "connection refused"
+```
+
+### Dead Letter Queue
+
+Failed events (after retry exhaustion) are published to a DLQ topic for manual review:
+
+```rust
+// Subscribe to DLQ for monitoring
+let mut dlq = bus.subscribe(
+    "greentic.dlq.*",
+    admin_ctx,
+    SubscriptionOptions::default()
+).await?;
+```
+
+## EventBus API
+
+### Building an EventBus
+
+```rust
+use greentic_events::{EventBusBuilder, SubscriptionOptions};
+use greentic_events::provider::EventProviderFactory;
+
+// Register providers from a pack directory
+let factory = MyProviderFactory::new();
+let bus = EventBusBuilder::new()
+    .register_from_pack_dir(pack_path, &factory, None)
+    .await?
+    .build();
+```
+
+### Publishing Events
+
+```rust
+// Full envelope
+bus.publish(event_envelope).await?;
+
+// Helper for simple JSON payloads
+bus.publish_event(&tenant, "my.topic", json!({
+    "key": "value"
+})).await?;
+```
+
+### Subscribing to Events
+
+```rust
+// Subscribe with options
+let options = SubscriptionOptions::default()
+    .with_batch_size(100)
+    .with_timeout(Duration::from_secs(30));
+
+let mut handle = bus.subscribe("topic.*", tenant_ctx, options).await?;
+
+// Or use the simpler helper
+let mut sub = bus.subscribe_topic(
+    "greentic.repo.build.status",
+    &tenant,
+    SubscriptionOptions::default()
+).await?;
+```
+
+## Pack Integration
+
+Event providers are declared in packs and auto-discovered:
+
+```yaml
+# pack.yaml
+events:
+  providers:
+    webhook:
+      type: webhook
+      config:
+        endpoint: https://api.example.com/events
+    timer:
+      type: timer
+      config:
+        cron: "0 9 * * *"  # Daily at 9am
+```
+
+The `EventBusBuilder` reads these declarations automatically:
+
+```rust
+let bus = EventBusBuilder::new()
+    .register_from_pack_dir("./packs/my-pack", &factory, None)
+    .await?
+    .build();
+```
+
+## ACLs and Tenant Isolation
+
+Control topic access per tenant:
+
+```rust
+let bus = EventBusBuilder::new()
+    .with_acl_config(AclConfig {
+        topic_allowlist: vec!["greentic.*", "custom.*"],
+        tenant_allowlist: vec!["tenant-a", "tenant-b"],
+    })
+    .build();
+```
+
+## Observability
+
+### Tracing
+
+Events automatically propagate OpenTelemetry context:
+
+```rust
+// Spans are created for publish/subscribe operations
+// Attributes include: topic, tenant, provider, event_id
+```
+
+### Metrics
+
+Standard metrics hooks:
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `events.published` | Counter | Events published |
+| `events.received` | Counter | Events received |
+| `events.retry.count` | Counter | Retry attempts |
+| `events.dlq.count` | Counter | DLQ publications |
+| `events.latency` | Histogram | End-to-end latency |
+
+## CLI
+
+Inspect event configuration from packs:
+
+```bash
+# Show providers from a pack
+greentic-events-cli --pack path/to/pack
+
+# With custom config
+greentic-events-cli --config /path/to/config.toml --pack path/to/pack
+
+# Introspect configuration
+greentic-events-cli config show
+greentic-events-cli config explain --json
+```
+
+## Best Practices
+
+### Topic Design
+
+- Use hierarchical topics for filtering flexibility
+- Include event type in the topic name
+- Reserve `greentic.*` for platform events
+
+### Idempotency
+
+Include idempotency keys in event metadata:
+
+```rust
+let envelope = EventEnvelope::new(topic, payload)
+    .with_metadata("idempotency_key", unique_id);
+```
+
+### Error Handling
+
+- Configure `retryable_errors` to match transient failures
+- Use DLQ for permanent failures requiring manual intervention
+- Monitor DLQ topics for operational alerts
+
+## Next Steps
+
+- **[Event Providers](/docs/events/providers)** — Webhook, timer, email, SMS providers
+- **[Flows](/docs/architecture/flows)** — Connect events to flow triggers
+- **[Observability](/docs/reference/telemetry)** — Telemetry configuration

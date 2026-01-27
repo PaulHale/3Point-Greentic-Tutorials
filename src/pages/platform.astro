@@ -4,6 +4,7 @@ import Card from '@/components/ui/Card.astro';
 import FiveLayersCanvas from '@/components/diagrams/FiveLayersCanvas';
 import DataFlowAnimation from '@/components/diagrams/DataFlowAnimation';
 import ComponentAnatomy from '@/components/diagrams/ComponentAnatomy';
+import LayerDetails from '@/components/diagrams/LayerDetails';
 
 const base = import.meta.env.BASE_URL;
 ---
@@ -163,126 +164,7 @@ const base = import.meta.env.BASE_URL;
         </p>
       </div>
 
-      <div class="space-y-8">
-        <!-- Developer Experience -->
-        <div class="p-6 rounded-xl border-2 border-primary/30 bg-gradient-to-r from-primary/5 to-transparent">
-          <div class="flex items-start gap-4">
-            <div class="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-primary">
-                <polyline points="16 18 22 12 16 6" />
-                <polyline points="8 6 2 12 8 18" />
-              </svg>
-            </div>
-            <div>
-              <h3 class="text-xl font-bold text-foreground mb-2">Developer Experience</h3>
-              <p class="text-muted-foreground mb-4">
-                Tools for building, testing, and debugging digital workers. Everything you need from idea to deployment.
-              </p>
-              <div class="flex flex-wrap gap-2">
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">greentic-dev CLI</span>
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">GUI Editor</span>
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">WebChat Testing</span>
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">IDE Plugins</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Supply Chain -->
-        <div class="p-6 rounded-xl border border-border bg-card">
-          <div class="flex items-start gap-4">
-            <div class="w-12 h-12 rounded-lg bg-[hsl(186,70%,50%,0.2)] flex items-center justify-center shrink-0">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-[hsl(186,70%,50%)]">
-                <path d="m7.5 4.27 9 5.15" />
-                <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
-              </svg>
-            </div>
-            <div>
-              <h3 class="text-xl font-bold text-foreground mb-2">Supply Chain</h3>
-              <p class="text-muted-foreground mb-4">
-                Complete lifecycle from building components to distributing packs. Secure, versioned, and auditable.
-              </p>
-              <div class="flex flex-wrap gap-2">
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">Pack Builder</span>
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">Component Store</span>
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">Distributor</span>
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">Signing</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Runtime -->
-        <div class="p-6 rounded-xl border border-border bg-card">
-          <div class="flex items-start gap-4">
-            <div class="w-12 h-12 rounded-lg bg-[hsl(220,70%,50%,0.2)] flex items-center justify-center shrink-0">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-[hsl(220,70%,50%)]">
-                <polygon points="5 3 19 12 5 21 5 3" />
-              </svg>
-            </div>
-            <div>
-              <h3 class="text-xl font-bold text-foreground mb-2">Runtime</h3>
-              <p class="text-muted-foreground mb-4">
-                Executes flows in secure WebAssembly sandboxes. Manages sessions, state, and MCP tool calls.
-              </p>
-              <div class="flex flex-wrap gap-2">
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">Flow Runner</span>
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">Session Manager</span>
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">State Store</span>
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">MCP Executor</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Integration -->
-        <div class="p-6 rounded-xl border border-border bg-card">
-          <div class="flex items-start gap-4">
-            <div class="w-12 h-12 rounded-lg bg-[hsl(280,70%,50%,0.2)] flex items-center justify-center shrink-0">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-[hsl(280,70%,50%)]">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-            </div>
-            <div>
-              <h3 class="text-xl font-bold text-foreground mb-2">Integration</h3>
-              <p class="text-muted-foreground mb-4">
-                Connects digital workers to the outside world. Messaging, events, and OAuth authentication.
-              </p>
-              <div class="flex flex-wrap gap-2">
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">Teams</span>
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">Slack</span>
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">WhatsApp</span>
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">Webhooks</span>
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">OAuth</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Foundation -->
-        <div class="p-6 rounded-xl border border-border bg-card">
-          <div class="flex items-start gap-4">
-            <div class="w-12 h-12 rounded-lg bg-[hsl(340,70%,50%,0.2)] flex items-center justify-center shrink-0">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-[hsl(340,70%,50%)]">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <path d="M3 9h18" />
-                <path d="M9 21V9" />
-              </svg>
-            </div>
-            <div>
-              <h3 class="text-xl font-bold text-foreground mb-2">Foundation</h3>
-              <p class="text-muted-foreground mb-4">
-                Shared primitives used by all layers. Types, interfaces, and telemetry that ensure consistency.
-              </p>
-              <div class="flex flex-wrap gap-2">
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">greentic-types</span>
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">greentic-interfaces</span>
-                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">greentic-telemetry</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <LayerDetails client:visible />
     </div>
   </section>
 

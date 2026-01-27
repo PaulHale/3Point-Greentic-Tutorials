@@ -1,0 +1,357 @@
+---
+title: Event Providers
+description: Webhook, timer, email, and SMS event providers for non-messaging triggers.
+order: 2
+---
+
+# Event Providers
+
+Event providers enable non-messaging triggers for Greentic flows. They're shipped as WebAssembly components and distributed via packs.
+
+## Available Providers
+
+| Provider | Trigger | Description |
+|----------|---------|-------------|
+| `webhook` | HTTP request | Receives HTTP webhooks and emits events |
+| `timer` | Schedule | Cron expressions or interval-based triggers |
+| `email` | Email receipt | Microsoft Graph or Gmail integration |
+| `sms` | SMS receipt | Twilio SMS integration |
+
+## Provider Structure
+
+Providers are Wasm components implementing the `greentic:events@1.0.0` world:
+
+```
+crates/provider-webhook/
+├── Cargo.toml
+├── src/lib.rs              # Wasm component implementation
+└── component.manifest.json
+```
+
+Packs declare providers for discovery:
+
+```yaml
+# packs/events/pack.yaml
+events:
+  providers:
+    webhook-inbound:
+      type: webhook
+      component: provider-webhook
+```
+
+## Webhook Provider
+
+### Source (Inbound)
+
+Receives HTTP POST requests and emits events:
+
+```yaml
+# Flow using webhook trigger
+id: github-webhook
+type: webhook
+start: process
+
+nodes:
+  process:
+    mcp.exec:
+      component: handler
+      action: process_webhook
+      args:
+        payload: "{{webhook.body}}"
+        headers: "{{webhook.headers}}"
+    routing:
+      - out: true
+```
+
+### Sink (Outbound)
+
+Sends events to external HTTP endpoints:
+
+```yaml
+events:
+  providers:
+    notify-external:
+      type: webhook
+      config:
+        endpoint: https://api.example.com/webhook
+        method: POST
+        headers:
+          Authorization: "Bearer {{secrets.API_TOKEN}}"
+```
+
+### Configuration
+
+| Setting | Type | Description |
+|---------|------|-------------|
+| `endpoint` | string | Target URL for outbound webhooks |
+| `method` | string | HTTP method (default: POST) |
+| `headers` | object | Additional HTTP headers |
+| `timeout_ms` | number | Request timeout (default: 30000) |
+| `retry_count` | number | Retry attempts on failure |
+
+## Timer Provider
+
+### Cron Expressions
+
+Schedule flows using standard cron syntax:
+
+```yaml
+events:
+  providers:
+    daily-report:
+      type: timer
+      config:
+        cron: "0 9 * * MON-FRI"  # 9am weekdays
+```
+
+### Interval-based
+
+Trigger at fixed intervals:
+
+```yaml
+events:
+  providers:
+    health-check:
+      type: timer
+      config:
+        interval_seconds: 300  # Every 5 minutes
+```
+
+### Timer Flow Example
+
+```yaml
+id: daily-summary
+type: timer
+start: generate
+
+nodes:
+  generate:
+    mcp.exec:
+      component: report-generator
+      action: generate_daily
+      args:
+        date: "{{timer.triggered_at}}"
+    routing:
+      - to: send_report
+
+  send_report:
+    mcp.exec:
+      component: email-sender
+      action: send
+      args:
+        to: "team@example.com"
+        subject: "Daily Summary - {{timer.triggered_at}}"
+        body: "{{generate.report}}"
+    routing:
+      - out: true
+```
+
+## Email Provider
+
+### Microsoft Graph Integration
+
+Receive emails via Microsoft Graph webhooks:
+
+```yaml
+events:
+  providers:
+    email-inbox:
+      type: email
+      config:
+        provider: msgraph
+        mailbox: support@company.com
+        folder: Inbox
+        filter: "isRead eq false"
+```
+
+### Gmail Integration
+
+Receive emails via Gmail push notifications:
+
+```yaml
+events:
+  providers:
+    gmail-inbox:
+      type: email
+      config:
+        provider: gmail
+        mailbox: support@company.com
+        labels: ["INBOX", "UNREAD"]
+```
+
+### Required Secrets
+
+**Microsoft Graph:**
+- `MSGRAPH_CLIENT_ID`
+- `MSGRAPH_CLIENT_SECRET`
+- `MSGRAPH_TENANT_ID`
+
+**Gmail:**
+- `GMAIL_CLIENT_ID`
+- `GMAIL_CLIENT_SECRET`
+- `GMAIL_REFRESH_TOKEN`
+
+### Email Event Payload
+
+```json
+{
+  "from": "sender@example.com",
+  "to": ["recipient@company.com"],
+  "subject": "Support Request",
+  "body": "Email body content...",
+  "received_at": "2024-01-15T10:30:00Z",
+  "attachments": [
+    {
+      "name": "document.pdf",
+      "content_type": "application/pdf",
+      "size_bytes": 12345
+    }
+  ]
+}
+```
+
+## SMS Provider (Twilio)
+
+### Inbound SMS
+
+Receive SMS messages via Twilio webhooks:
+
+```yaml
+events:
+  providers:
+    sms-inbound:
+      type: sms
+      config:
+        provider: twilio
+        phone_number: "+15551234567"
+```
+
+### Outbound SMS
+
+Send SMS messages:
+
+```yaml
+events:
+  providers:
+    sms-outbound:
+      type: sms
+      config:
+        provider: twilio
+        from_number: "+15551234567"
+```
+
+### Required Secrets
+
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_FROM_NUMBER`
+
+### SMS Event Payload
+
+```json
+{
+  "from": "+15559876543",
+  "to": "+15551234567",
+  "body": "Message content",
+  "received_at": "2024-01-15T10:30:00Z"
+}
+```
+
+## Secrets Workflow
+
+Providers declare secret requirements in their capabilities:
+
+```json
+{
+  "capabilities": {
+    "secrets": ["API_KEY", "WEBHOOK_SECRET"]
+  }
+}
+```
+
+Provision secrets before deploying:
+
+```bash
+# After building the pack
+greentic-secrets init --pack dist/packs/my-events.gtpack
+```
+
+### Secrets Events
+
+Providers emit metadata-only events for secrets operations:
+
+| Topic | Description |
+|-------|-------------|
+| `greentic.secrets.put` | Secret created/updated |
+| `greentic.secrets.delete` | Secret deleted |
+| `greentic.secrets.rotate.requested` | Rotation requested |
+| `greentic.secrets.rotate.completed` | Rotation completed |
+| `greentic.secrets.missing.detected` | Required secret not found |
+
+Payloads include key/scope/tenant context only — never secret values.
+
+## Building Provider Packs
+
+### Pack Structure
+
+```
+my-events-pack/
+├── packs/events/
+│   ├── pack.yaml
+│   └── flows/
+│       └── default.ygtc
+├── crates/
+│   └── my-provider/
+│       ├── Cargo.toml
+│       └── src/lib.rs
+└── dist/packs/
+    └── my-events.gtpack
+```
+
+### Build Script
+
+```bash
+# Build validated .gtpack artifacts
+./scripts/build_packs.sh
+
+# Or use greentic-pack directly
+greentic-pack build --in packs/events --gtpack-out dist/packs/events.gtpack
+```
+
+## OCI Distribution
+
+Published provider packs are available via OCI:
+
+```bash
+# Pull the default events providers
+oras pull ghcr.io/greentic-ai/greentic-events-providers:latest -o /tmp/providers
+
+# Inspect
+greentic-events-cli --pack /tmp/providers/events.gtpack
+```
+
+## Integration Testing
+
+Live tests can be enabled with environment variables:
+
+```bash
+# Enable live testing
+export RUN_LIVE_TESTS=true
+export RUN_LIVE_HTTP=true
+
+# Provider-specific credentials
+export MSGRAPH_CLIENT_ID=...
+export MSGRAPH_CLIENT_SECRET=...
+export TWILIO_ACCOUNT_SID=...
+
+# Run tests
+cargo test
+```
+
+Tests skip automatically when credentials are missing, emitting a warning.
+
+## Next Steps
+
+- **[Events Overview](/docs/events/overview)** — Event fabric architecture
+- **[Flows](/docs/architecture/flows)** — Connect events to flows
+- **[OAuth](/docs/oauth/overview)** — OAuth for provider authentication

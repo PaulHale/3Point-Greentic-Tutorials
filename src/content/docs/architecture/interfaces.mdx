@@ -1,0 +1,437 @@
+---
+title: "WIT Interfaces"
+description: "WebAssembly Interface Types (WIT) contracts defining host-guest boundaries for Greentic components."
+---
+
+import { InterfacesDiagram } from '@/components/diagrams/InterfacesDiagram';
+
+# WIT Interfaces
+
+The `greentic-interfaces` crate provides WebAssembly Interface Types (WIT) packages and Rust bindings that define the contracts between Greentic components and the runtime.
+
+## Overview
+
+Greentic Interfaces provides:
+
+- **WIT Packages** — Type-safe interface definitions for host-guest communication
+- **Rust Bindings** — Generated code for implementing and consuming interfaces
+- **Capability Model** — Fine-grained permissions through imported interfaces
+- **Cross-Language Support** — Interfaces work with any Wasm-compatible language
+
+## Architecture
+
+<InterfacesDiagram client:load className="my-8" />
+
+## Component Model
+
+Greentic uses the WebAssembly Component Model, which provides:
+
+### Guest Exports
+
+Components export functions that the host (runtime) can call:
+
+```wit
+// greentic:component/handler
+interface handler {
+    /// Main entry point for component execution
+    handle: func(request: execution-request) -> execution-response;
+
+    /// Optional: Return component description
+    describe: func() -> option<string>;
+}
+```
+
+### Host Imports
+
+Components import capabilities provided by the runtime:
+
+```wit
+// greentic:state/store
+interface store {
+    /// Get a value by key
+    get: func(key: string) -> option<string>;
+
+    /// Set a value with optional TTL
+    set: func(key: string, value: string, ttl: option<duration>) -> result<_, error>;
+
+    /// Delete a key
+    delete: func(key: string) -> result<bool, error>;
+}
+```
+
+## Core WIT Packages
+
+### greentic:component
+
+The primary component interface for flow node execution:
+
+```wit
+package greentic:component@0.5.0;
+
+world component {
+    // Exports (component provides)
+    export handler;
+
+    // Imports (runtime provides)
+    import greentic:state/store;
+    import greentic:secrets/vault;
+    import greentic:messaging/sender;
+    import wasi:http/outgoing-handler;
+    import wasi:logging/logging;
+}
+
+interface handler {
+    use types.{execution-request, execution-response};
+
+    handle: func(request: execution-request) -> execution-response;
+}
+```
+
+### greentic:state
+
+Key-value state persistence:
+
+```wit
+package greentic:state@0.2.0;
+
+interface store {
+    /// Get value by key (tenant-scoped)
+    get: func(key: string) -> option<string>;
+
+    /// Set value with optional TTL in seconds
+    set: func(key: string, value: string, ttl-secs: option<u64>) -> result<_, store-error>;
+
+    /// Delete key and return whether it existed
+    delete: func(key: string) -> result<bool, store-error>;
+
+    /// List keys matching pattern
+    list: func(pattern: string) -> result<list<string>, store-error>;
+
+    /// Check if key exists
+    exists: func(key: string) -> result<bool, store-error>;
+
+    variant store-error {
+        not-found,
+        permission-denied,
+        connection-failed,
+        internal(string),
+    }
+}
+```
+
+### greentic:secrets
+
+Secure secrets access:
+
+```wit
+package greentic:secrets@0.2.0;
+
+interface vault {
+    /// Get secret value by key
+    get-secret: func(key: string) -> result<string, secret-error>;
+
+    /// List available secret keys (not values)
+    list-secrets: func() -> result<list<string>, secret-error>;
+
+    variant secret-error {
+        not-found,
+        permission-denied,
+        internal(string),
+    }
+}
+```
+
+### greentic:messaging
+
+Multi-channel messaging interface:
+
+```wit
+package greentic:messaging@0.2.0;
+
+interface sender {
+    use types.{message, message-card, send-result};
+
+    /// Send a text message
+    send-text: func(channel: string, recipient: string, text: string) -> send-result;
+
+    /// Send a rich card
+    send-card: func(channel: string, recipient: string, card: message-card) -> send-result;
+
+    /// Reply to current conversation
+    reply: func(text: string) -> send-result;
+
+    /// Reply with a card
+    reply-card: func(card: message-card) -> send-result;
+}
+
+interface types {
+    record message {
+        id: string,
+        channel: string,
+        from: string,
+        content: string,
+        timestamp: u64,
+    }
+
+    record message-card {
+        title: option<string>,
+        body: option<string>,
+        actions: list<card-action>,
+    }
+
+    record card-action {
+        action-type: string,
+        title: string,
+        value: string,
+    }
+
+    variant send-result {
+        ok(string),
+        err(send-error),
+    }
+
+    variant send-error {
+        channel-unavailable,
+        recipient-not-found,
+        rate-limited,
+        internal(string),
+    }
+}
+```
+
+### wasix:mcp
+
+Model Context Protocol tool execution:
+
+```wit
+package wasix:mcp@25.06.18;
+
+interface tools {
+    /// Invoke an MCP tool by name
+    invoke-tool: func(
+        server: string,
+        tool: string,
+        arguments: string,  // JSON
+    ) -> result<string, mcp-error>;
+
+    /// List available tools from a server
+    list-tools: func(server: string) -> result<list<tool-info>, mcp-error>;
+
+    record tool-info {
+        name: string,
+        description: option<string>,
+        input-schema: string,  // JSON Schema
+    }
+
+    variant mcp-error {
+        server-not-found,
+        tool-not-found,
+        invalid-arguments,
+        execution-failed(string),
+    }
+}
+```
+
+## Using Interfaces
+
+### In Components (Rust)
+
+```rust
+use greentic_component::prelude::*;
+
+// The macro sets up all WIT bindings
+component_entrypoint!(MyComponent);
+
+struct MyComponent;
+
+impl Guest for MyComponent {
+    fn handle(request: ExecutionRequest) -> ExecutionResponse {
+        // Access imported capabilities
+        let value = greentic::state::store::get("my-key");
+        let secret = greentic::secrets::vault::get_secret("api-key")?;
+
+        // Use HTTP client
+        let response = wasi::http::outgoing_handler::handle(request)?;
+
+        ExecutionResponse::success(result)
+    }
+}
+```
+
+### In Components (Other Languages)
+
+WIT interfaces can be used with any language that supports the Component Model:
+
+**JavaScript/TypeScript (via jco):**
+```typescript
+import { get, set } from 'greentic:state/store';
+
+export function handle(request: ExecutionRequest): ExecutionResponse {
+    const cached = get('cache-key');
+    if (cached) {
+        return { success: true, data: cached };
+    }
+    // ...
+}
+```
+
+**Go (via wit-bindgen):**
+```go
+package main
+
+import (
+    "greentic.ai/component/state"
+)
+
+func Handle(request ExecutionRequest) ExecutionResponse {
+    value, _ := state.Get("my-key")
+    // ...
+}
+```
+
+## Capability-Based Security
+
+Components only have access to capabilities they explicitly import:
+
+```wit
+// Minimal component - no network, no secrets
+world minimal-component {
+    export handler;
+    import greentic:state/store;  // Only state access
+}
+
+// Full-featured component
+world full-component {
+    export handler;
+    import greentic:state/store;
+    import greentic:secrets/vault;
+    import greentic:messaging/sender;
+    import wasi:http/outgoing-handler;
+    import wasix:mcp/tools;
+}
+```
+
+### Manifest Capabilities
+
+The component manifest declares required capabilities:
+
+```json
+{
+  "capabilities": [
+    { "type": "state" },
+    { "type": "secrets", "keys": ["api-key", "db-password"] },
+    { "type": "http", "hosts": ["api.example.com"] },
+    { "type": "mcp", "servers": ["filesystem", "database"] }
+  ]
+}
+```
+
+The runtime validates capabilities at:
+1. **Build time** — Manifest must declare all imports
+2. **Load time** — Runner verifies manifest against policy
+3. **Run time** — Calls to undeclared capabilities fail
+
+## Type Mappings
+
+### WIT to Rust
+
+| WIT Type | Rust Type |
+|----------|-----------|
+| `string` | `String` |
+| `bool` | `bool` |
+| `u8`, `u16`, `u32`, `u64` | `u8`, `u16`, `u32`, `u64` |
+| `s8`, `s16`, `s32`, `s64` | `i8`, `i16`, `i32`, `i64` |
+| `f32`, `f64` | `f32`, `f64` |
+| `option<T>` | `Option<T>` |
+| `result<T, E>` | `Result<T, E>` |
+| `list<T>` | `Vec<T>` |
+| `tuple<T...>` | `(T...)` |
+| `record { ... }` | `struct { ... }` |
+| `variant { ... }` | `enum { ... }` |
+
+### Memory Model
+
+WIT uses a copy-based memory model between host and guest:
+
+- **Strings** are copied as UTF-8 bytes
+- **Lists** are copied element by element
+- **Records** are copied field by field
+- **No shared mutable state** between host and guest
+
+This provides strong isolation but requires careful design for large data.
+
+## Versioning
+
+WIT packages use semantic versioning:
+
+```wit
+package greentic:component@0.5.0;
+```
+
+### Compatibility Rules
+
+- **Patch** (0.5.x): Bug fixes only, fully compatible
+- **Minor** (0.x.0): Additive changes, backwards compatible
+- **Major** (x.0.0): Breaking changes, requires component rebuild
+
+### Migration
+
+When interfaces change:
+
+```rust
+// Support multiple versions
+#[cfg(feature = "wit-0.4")]
+use greentic_interfaces_0_4::*;
+
+#[cfg(feature = "wit-0.5")]
+use greentic_interfaces_0_5::*;
+```
+
+## Development
+
+### Generating Bindings
+
+```bash
+# Install wit-bindgen
+cargo install wit-bindgen-cli
+
+# Generate Rust bindings
+wit-bindgen rust ./wit --out-dir src/bindings
+
+# Generate for other languages
+wit-bindgen js ./wit --out-dir bindings/js
+wit-bindgen go ./wit --out-dir bindings/go
+```
+
+### Testing Interfaces
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Mock the state store for testing
+    mock_import!(greentic::state::store, MockStore {
+        fn get(key: &str) -> Option<String> {
+            match key {
+                "test-key" => Some("test-value".to_string()),
+                _ => None,
+            }
+        }
+    });
+
+    #[test]
+    fn test_component() {
+        let request = ExecutionRequest::test();
+        let response = handle(request);
+        assert!(response.is_success());
+    }
+}
+```
+
+## Related
+
+- [Components](/docs/architecture/components) — Component architecture
+- [Types](/docs/architecture/types) — Shared Rust types
+- [Runner](/docs/architecture/runner) — Runtime that hosts components
+- [Security](/docs/architecture/security) — Capability-based security model

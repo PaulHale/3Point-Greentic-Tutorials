@@ -1,0 +1,296 @@
+---
+title: "Runner"
+description: "Production flow execution host for deploying and running Greentic digital workers at scale."
+---
+
+import { RunnerArchitectureDiagram } from '@/components/diagrams/RunnerArchitectureDiagram';
+
+# Runner
+
+The Greentic Runner is the production execution host that runs flows, manages sessions, and handles multi-tenant workloads.
+
+## Overview
+
+The Runner provides:
+
+- **Multi-tenant Isolation** — Complete separation between tenant workloads
+- **Hot Reload** — Pack updates without downtime
+- **Session Management** — Pause, resume, and persist conversations
+- **Horizontal Scaling** — Stateless design for easy scaling
+
+## Architecture
+
+<RunnerArchitectureDiagram client:load className="my-8" />
+
+## Core Components
+
+### Pack Watcher
+
+Monitors pack sources and triggers automatic reloads:
+
+```rust
+// Pack watcher configuration
+PackWatcher::new()
+    .source(PackSource::Filesystem("/packs"))
+    .source(PackSource::Oci("registry.greentic.ai"))
+    .source(PackSource::S3("s3://my-bucket/packs"))
+    .poll_interval(Duration::from_secs(30))
+    .on_change(|pack| tenant_router.reload(pack))
+    .start()
+```
+
+### Tenant Router
+
+Routes incoming requests to the correct tenant runtime:
+
+| Header/Parameter | Purpose |
+|-----------------|---------|
+| `X-Tenant-ID` | Explicit tenant identification |
+| `X-Team-ID` | Team within tenant |
+| Bot Token | Implicit tenant from messaging platform |
+| Webhook Path | Tenant encoded in URL path |
+
+### Flow Executor
+
+Orchestrates flow execution through the node graph:
+
+```rust
+// Simplified flow execution
+async fn execute_flow(
+    ctx: TenantCtx,
+    flow: &Flow,
+    input: Message,
+) -> Result<Response> {
+    let mut state = SessionState::new(&ctx);
+    let mut current = flow.start_node();
+
+    loop {
+        // Execute current node
+        let result = component_host
+            .execute(current.component(), &state, &input)
+            .await?;
+
+        // Update state
+        state.merge(result.state_updates);
+
+        // Determine next node
+        match current.route(&result) {
+            Routing::Next(node) => current = node,
+            Routing::Reply(msg) => return Ok(Response::Reply(msg)),
+            Routing::End => return Ok(Response::End),
+        }
+    }
+}
+```
+
+### Component Host
+
+Wasmtime-based runtime for executing WebAssembly components:
+
+- **Sandboxing** — Each component runs in isolation
+- **Resource Limits** — Memory, CPU, and time constraints
+- **Capability Control** — Fine-grained permission model
+- **Caching** — Compiled modules are cached for performance
+
+## Pack Index Sources
+
+The Runner can load packs from multiple sources:
+
+### Filesystem
+
+```toml
+# runner.toml
+[[pack_sources]]
+type = "filesystem"
+path = "/var/greentic/packs"
+watch = true
+```
+
+### HTTPS
+
+```toml
+[[pack_sources]]
+type = "https"
+url = "https://packs.example.com/index.json"
+poll_interval = "5m"
+auth = "bearer"
+token_env = "PACK_TOKEN"
+```
+
+### OCI Registry
+
+```toml
+[[pack_sources]]
+type = "oci"
+registry = "registry.greentic.ai"
+repository = "my-org/*"
+poll_interval = "1m"
+```
+
+### S3 Bucket
+
+```toml
+[[pack_sources]]
+type = "s3"
+bucket = "my-greentic-packs"
+prefix = "production/"
+region = "eu-west-1"
+```
+
+## Deployment
+
+### Docker
+
+```dockerfile
+FROM greentic/runner:latest
+
+COPY packs/ /packs/
+COPY runner.toml /etc/greentic/
+
+EXPOSE 8080
+CMD ["greentic-runner", "--config", "/etc/greentic/runner.toml"]
+```
+
+### Kubernetes
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: greentic-runner
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: greentic-runner
+  template:
+    metadata:
+      labels:
+        app: greentic-runner
+    spec:
+      containers:
+        - name: runner
+          image: greentic/runner:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: RUST_LOG
+              value: "info"
+          resources:
+            limits:
+              memory: "2Gi"
+              cpu: "2"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/greentic
+      volumes:
+        - name: config
+          configMap:
+            name: runner-config
+```
+
+## Configuration
+
+### Full Configuration Reference
+
+```toml
+# runner.toml
+
+[server]
+host = "0.0.0.0"
+port = 8080
+workers = 4
+
+[telemetry]
+otlp_endpoint = "http://otel-collector:4317"
+service_name = "greentic-runner"
+trace_sample_rate = 1.0
+
+[session]
+# Session storage backend
+backend = "redis"
+redis_url = "redis://localhost:6379"
+ttl = "24h"
+
+[state]
+# State storage backend
+backend = "postgres"
+postgres_url = "postgres://localhost/greentic"
+
+[limits]
+# Per-component limits
+max_memory_mb = 256
+max_cpu_time_ms = 5000
+max_wall_time_ms = 30000
+
+[security]
+# mTLS configuration
+tls_cert = "/certs/server.crt"
+tls_key = "/certs/server.key"
+ca_cert = "/certs/ca.crt"
+require_client_cert = true
+
+[[pack_sources]]
+type = "filesystem"
+path = "/packs"
+watch = true
+
+[[pack_sources]]
+type = "oci"
+registry = "registry.greentic.ai"
+poll_interval = "5m"
+```
+
+## Scaling
+
+### Horizontal Scaling
+
+The Runner is designed for horizontal scaling:
+
+1. **Stateless Core** — All state is externalised
+2. **Session Affinity** — Optional sticky sessions via load balancer
+3. **Pack Sync** — All instances watch the same pack sources
+4. **Health Checks** — Built-in readiness and liveness probes
+
+### Load Balancing
+
+```yaml
+# Kubernetes Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: greentic-runner
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 8080
+  selector:
+    app: greentic-runner
+  sessionAffinity: ClientIP  # Optional session affinity
+```
+
+## Monitoring
+
+### Health Endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /health` | Basic health check |
+| `GET /ready` | Readiness probe (packs loaded) |
+| `GET /metrics` | Prometheus metrics |
+
+### Key Metrics
+
+- `greentic_flow_executions_total` — Total flow executions
+- `greentic_flow_duration_seconds` — Flow execution duration
+- `greentic_component_calls_total` — Component invocations
+- `greentic_active_sessions` — Currently active sessions
+- `greentic_pack_reloads_total` — Pack reload events
+
+## Related
+
+- [Flows](/docs/architecture/flows) — Flow structure and execution
+- [Session](/docs/architecture/session) — Session management
+- [State](/docs/architecture/state) — State persistence
+- [Security](/docs/architecture/security) — Security architecture

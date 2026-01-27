@@ -75,6 +75,41 @@ export const docsNavSections: NavSection[] = [
         description: 'Bundled, signed packages for distribution',
       },
       {
+        title: 'Runner',
+        href: '/docs/architecture/runner',
+        description: 'Production flow execution host',
+      },
+      {
+        title: 'Session',
+        href: '/docs/architecture/session',
+        description: 'Conversational session management',
+      },
+      {
+        title: 'State Store',
+        href: '/docs/architecture/state',
+        description: 'Key-value state persistence',
+      },
+      {
+        title: 'Distributor',
+        href: '/docs/architecture/distributor',
+        description: 'Pack distribution service',
+      },
+      {
+        title: 'GUI Runtime',
+        href: '/docs/architecture/gui',
+        description: 'Visual GUI runtime for flows',
+      },
+      {
+        title: 'Shared Types',
+        href: '/docs/architecture/types',
+        description: 'Core Rust types and manifests',
+      },
+      {
+        title: 'WIT Interfaces',
+        href: '/docs/architecture/interfaces',
+        description: 'WebAssembly interface contracts',
+      },
+      {
         title: 'Multi-tenancy',
         href: '/docs/architecture/multi-tenancy',
         description: 'Tenant isolation and identity',

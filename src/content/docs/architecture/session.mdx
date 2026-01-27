@@ -1,0 +1,308 @@
+---
+title: "Session Management"
+description: "Conversational session management for maintaining state across multi-turn interactions."
+---
+
+import { SessionDiagram } from '@/components/diagrams/SessionDiagram';
+
+# Session Management
+
+The Session system (`greentic-session`) manages conversational state across multi-turn interactions with users.
+
+## Overview
+
+Sessions provide:
+
+- **Conversation Continuity** — Maintain context across messages
+- **Pause & Resume** — Persist sessions for later continuation
+- **Multi-tenant Isolation** — Complete separation between tenants
+- **Scalability** — Externalised storage for horizontal scaling
+
+## Session Lifecycle
+
+<SessionDiagram client:load className="my-8" />
+
+## Core Concepts
+
+### Session Identity
+
+Every session has a unique identity composed of:
+
+```typescript
+interface SessionId {
+  tenant: string;     // Tenant identifier
+  team?: string;      // Optional team within tenant
+  channel: string;    // Messaging channel (teams, slack, etc.)
+  user: string;       // User identifier from channel
+  conversation: string; // Conversation/thread identifier
+}
+```
+
+### Session State
+
+Sessions contain all the state needed to continue a conversation:
+
+```typescript
+interface Session {
+  id: SessionId;
+  flow_id: string;           // Active flow
+  current_node: string;      // Current position in flow
+  variables: Variables;      // Flow variables
+  context: Context;          // Execution context
+  created_at: DateTime;
+  updated_at: DateTime;
+  expires_at?: DateTime;
+}
+```
+
+## Storage Backends
+
+### Redis (Recommended)
+
+Best for high-performance, distributed deployments:
+
+```toml
+[session]
+backend = "redis"
+redis_url = "redis://localhost:6379"
+redis_cluster = false
+key_prefix = "greentic:session:"
+ttl = "24h"
+```
+
+### PostgreSQL
+
+For environments with existing PostgreSQL infrastructure:
+
+```toml
+[session]
+backend = "postgres"
+postgres_url = "postgres://user:pass@localhost/greentic"
+table = "sessions"
+ttl = "24h"
+```
+
+### In-Memory
+
+For development and testing only:
+
+```toml
+[session]
+backend = "memory"
+max_sessions = 10000
+```
+
+## API
+
+### Creating Sessions
+
+```rust
+// Create a new session
+let session = SessionManager::create(
+    SessionId::new(tenant, channel, user, conversation),
+    flow_id,
+)?;
+
+// Or get existing session (creates if not exists)
+let session = SessionManager::get_or_create(
+    SessionId::new(tenant, channel, user, conversation),
+    flow_id,
+)?;
+```
+
+### Updating Sessions
+
+```rust
+// Update current node
+session.set_node("process_request")?;
+
+// Set variables
+session.set_variable("priority", "high")?;
+session.set_variable("ticket_id", "TICK-123")?;
+
+// Batch update
+session.update(|s| {
+    s.node = "next_step";
+    s.variables.insert("status", "pending");
+})?;
+```
+
+### Pausing & Resuming
+
+```rust
+// Pause session (serialises to storage)
+let token = session.pause()?;
+
+// Later: Resume session
+let session = SessionManager::resume(token)?;
+```
+
+### Ending Sessions
+
+```rust
+// End session (cleanup)
+session.end()?;
+
+// Or end with reason
+session.end_with_reason(EndReason::Completed)?;
+session.end_with_reason(EndReason::Timeout)?;
+session.end_with_reason(EndReason::UserCancelled)?;
+```
+
+## Variable Scopes
+
+Sessions support multiple variable scopes:
+
+| Scope | Lifetime | Use Case |
+|-------|----------|----------|
+| `flow` | Current flow execution | Temporary working data |
+| `session` | Entire session | Accumulated answers, context |
+| `user` | All user sessions | User preferences, history |
+| `tenant` | All tenant sessions | Tenant configuration |
+
+### Setting Scoped Variables
+
+```yaml
+# In flow definition
+nodes:
+  collect_info:
+    qa.process:
+      questions:
+        - id: user_name
+          prompt: "What's your name?"
+          scope: session  # Persists across flow restarts
+        - id: temp_value
+          prompt: "Enter a value"
+          scope: flow     # Cleared on flow restart
+```
+
+### Accessing Variables
+
+```rust
+// Get variable (checks scopes in order: flow -> session -> user -> tenant)
+let name = session.get_variable("user_name")?;
+
+// Get from specific scope
+let pref = session.get_scoped_variable(Scope::User, "language")?;
+```
+
+## Timeout Handling
+
+### Configuration
+
+```toml
+[session.timeouts]
+# Time before session auto-pauses
+idle_timeout = "30m"
+
+# Time before paused session expires
+pause_timeout = "24h"
+
+# Maximum session duration
+max_duration = "7d"
+
+# Warning before timeout
+warning_threshold = "5m"
+```
+
+### Timeout Events
+
+```rust
+SessionManager::on_timeout(|session, timeout_type| {
+    match timeout_type {
+        TimeoutType::Idle => {
+            // Send reminder message
+            session.send_message("Are you still there?");
+        }
+        TimeoutType::Expiring => {
+            // Warn user
+            session.send_message("Session will expire in 5 minutes");
+        }
+        TimeoutType::Expired => {
+            // Cleanup
+            session.end_with_reason(EndReason::Timeout);
+        }
+    }
+});
+```
+
+## Concurrency
+
+### Locking
+
+Sessions use optimistic locking to prevent concurrent modifications:
+
+```rust
+// Acquire lock before update
+let guard = session.lock(Duration::from_secs(30))?;
+
+// Make changes
+guard.set_node("new_node")?;
+guard.set_variable("status", "updated")?;
+
+// Lock released on drop
+```
+
+### Conflict Resolution
+
+```rust
+// Handle concurrent access
+match session.try_update(|s| s.variables.insert("key", "value")) {
+    Ok(_) => println!("Updated successfully"),
+    Err(ConcurrencyError::Conflict) => {
+        // Retry with fresh data
+        let fresh = session.refresh()?;
+        fresh.set_variable("key", "value")?;
+    }
+}
+```
+
+## Observability
+
+### Metrics
+
+| Metric | Description |
+|--------|-------------|
+| `session_created_total` | Sessions created |
+| `session_resumed_total` | Sessions resumed |
+| `session_ended_total` | Sessions ended (by reason) |
+| `session_active_count` | Currently active sessions |
+| `session_duration_seconds` | Session duration histogram |
+
+### Tracing
+
+Sessions integrate with OpenTelemetry:
+
+```rust
+// All session operations are traced
+// Example span attributes:
+{
+  "session.id": "sess_abc123",
+  "session.tenant": "acme-corp",
+  "session.flow": "support-flow",
+  "session.node": "collect_issue"
+}
+```
+
+## Best Practices
+
+### Design
+
+1. **Keep sessions lean** — Store only necessary data
+2. **Use appropriate scopes** — Don't overuse session scope
+3. **Plan for timeouts** — Handle session expiry gracefully
+4. **Consider privacy** — Be mindful of stored data
+
+### Operations
+
+1. **Monitor session counts** — Alert on unusual patterns
+2. **Set appropriate TTLs** — Balance UX with resource usage
+3. **Plan for recovery** — Handle storage failures gracefully
+4. **Regular cleanup** — Remove expired sessions
+
+## Related
+
+- [Runner](/docs/architecture/runner) — Production execution host
+- [State](/docs/architecture/state) — Key-value state persistence
+- [Flows](/docs/architecture/flows) — Flow execution model
+- [Multi-tenancy](/docs/architecture/multi-tenancy) — Tenant isolation

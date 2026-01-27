@@ -1,0 +1,415 @@
+---
+title: "Shared Types"
+description: "Core Rust types and manifests that form the foundation of all Greentic components."
+---
+
+import { TypesDiagram } from '@/components/diagrams/TypesDiagram';
+
+# Shared Types
+
+The `greentic-types` crate provides the foundational Rust types used across all Greentic components.
+
+## Overview
+
+Greentic Types provides:
+
+- **Identity Types** — Tenant, team, and user identification
+- **Flow Types** — Flow definition and execution structures
+- **Component Types** — Component manifests and capabilities
+- **Pack Types** — Pack bundling and signature types
+- **Common Primitives** — IDs, versions, and utilities
+
+## Type Categories
+
+<TypesDiagram client:load className="my-8" />
+
+## Identity Types
+
+### TenantCtx
+
+The tenant context is propagated through every API call:
+
+```rust
+use greentic_types::identity::TenantCtx;
+
+#[derive(Clone, Debug)]
+pub struct TenantCtx {
+    /// Unique tenant identifier
+    pub tenant_id: TenantId,
+    /// Optional team within tenant
+    pub team_id: Option<TeamId>,
+    /// User making the request
+    pub user_id: Option<UserId>,
+    /// Request correlation ID
+    pub correlation_id: CorrelationId,
+    /// Additional claims/attributes
+    pub claims: Claims,
+}
+
+impl TenantCtx {
+    /// Create new tenant context
+    pub fn new(tenant_id: impl Into<TenantId>) -> Self;
+
+    /// Add team to context
+    pub fn with_team(self, team_id: impl Into<TeamId>) -> Self;
+
+    /// Add user to context
+    pub fn with_user(self, user_id: impl Into<UserId>) -> Self;
+}
+```
+
+### Identity Types
+
+```rust
+use greentic_types::identity::{TenantId, TeamId, UserId};
+
+// All IDs are strongly typed wrappers
+pub struct TenantId(String);
+pub struct TeamId(String);
+pub struct UserId(String);
+
+// Creation
+let tenant = TenantId::new("acme-corp");
+let team = TeamId::new("engineering");
+let user = UserId::new("alice@acme.com");
+
+// Validation
+assert!(TenantId::is_valid("acme-corp"));  // true
+assert!(!TenantId::is_valid(""));          // false
+```
+
+## Flow Types
+
+### Flow
+
+The flow definition structure:
+
+```rust
+use greentic_types::flow::{Flow, Node, Routing};
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Flow {
+    /// Unique flow identifier
+    pub id: FlowId,
+    /// Flow type (messaging, events, etc.)
+    pub flow_type: FlowType,
+    /// Human-readable title
+    pub title: Option<String>,
+    /// Description
+    pub description: Option<String>,
+    /// Starting node
+    pub start: NodeId,
+    /// Flow nodes
+    pub nodes: HashMap<NodeId, Node>,
+    /// Flow parameters
+    pub parameters: Parameters,
+    /// Schema version
+    pub schema_version: u32,
+}
+```
+
+### Node
+
+Individual flow nodes:
+
+```rust
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Node {
+    /// Operation to execute
+    pub operation: Operation,
+    /// Operation configuration
+    pub config: serde_json::Value,
+    /// Routing rules
+    pub routing: Vec<RoutingRule>,
+    /// Timeout configuration
+    pub timeout: Option<Duration>,
+    /// Retry configuration
+    pub retry: Option<RetryConfig>,
+}
+```
+
+### Routing
+
+Flow routing rules:
+
+```rust
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RoutingRule {
+    /// Simple next node
+    Next { to: NodeId },
+    /// Conditional routing
+    Conditional { when: String, to: NodeId },
+    /// Terminal: send reply
+    Reply { reply: bool },
+    /// Terminal: end flow
+    End { out: bool },
+}
+```
+
+## Component Types
+
+### ComponentManifest
+
+Self-describing component manifest:
+
+```rust
+use greentic_types::component::ComponentManifest;
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ComponentManifest {
+    /// Schema version
+    pub schema_version: String,
+    /// Component identifier
+    pub id: ComponentId,
+    /// Semantic version
+    pub version: Version,
+    /// Human-readable name
+    pub name: String,
+    /// Description
+    pub description: Option<String>,
+    /// Organisation
+    pub organisation: String,
+    /// Authors
+    pub authors: Vec<Author>,
+    /// License
+    pub license: Option<String>,
+    /// WIT world
+    pub wit_world: String,
+    /// Required capabilities
+    pub capabilities: Vec<Capability>,
+    /// Operations provided
+    pub operations: Vec<OperationDef>,
+    /// Configuration schema
+    pub config_schema: Option<JsonSchema>,
+}
+```
+
+### Capability
+
+Component capability requirements:
+
+```rust
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum Capability {
+    /// Network access
+    Network {
+        outbound: bool,
+        hosts: Vec<String>,
+    },
+    /// Filesystem access
+    Filesystem {
+        read: bool,
+        write: bool,
+        paths: Vec<PathBuf>,
+    },
+    /// Environment variables
+    Environment {
+        variables: Vec<String>,
+    },
+    /// HTTP client
+    HttpClient {
+        allowed_hosts: Vec<String>,
+    },
+    /// State storage
+    State,
+    /// Secrets access
+    Secrets {
+        keys: Vec<String>,
+    },
+}
+```
+
+## Pack Types
+
+### PackManifest
+
+Pack bundle manifest:
+
+```rust
+use greentic_types::pack::PackManifest;
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PackManifest {
+    /// Schema version
+    pub schema_version: String,
+    /// Pack identifier
+    pub id: PackId,
+    /// Semantic version
+    pub version: Version,
+    /// Human-readable name
+    pub name: String,
+    /// Description
+    pub description: Option<String>,
+    /// Flows included
+    pub flows: Vec<FlowRef>,
+    /// Components included
+    pub components: Vec<ComponentRef>,
+    /// Dependencies
+    pub dependencies: Vec<Dependency>,
+    /// Build metadata
+    pub build: BuildMetadata,
+}
+```
+
+### Signature
+
+Cryptographic signature:
+
+```rust
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Signature {
+    /// Signature algorithm
+    pub algorithm: SignatureAlgorithm,
+    /// Signer public key fingerprint
+    pub signer: KeyFingerprint,
+    /// Signature bytes (base64)
+    pub signature: String,
+    /// Content hash
+    pub content_hash: ContentHash,
+    /// Signature timestamp
+    pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum SignatureAlgorithm {
+    Ed25519,
+}
+```
+
+## Messaging Types
+
+### Message
+
+Universal message structure:
+
+```rust
+use greentic_types::messaging::Message;
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Message {
+    /// Message ID
+    pub id: MessageId,
+    /// Channel source
+    pub channel: Channel,
+    /// Sender information
+    pub from: Sender,
+    /// Recipient information
+    pub to: Option<Recipient>,
+    /// Message content
+    pub content: MessageContent,
+    /// Attachments
+    pub attachments: Vec<Attachment>,
+    /// Timestamp
+    pub timestamp: DateTime<Utc>,
+    /// Metadata
+    pub metadata: Metadata,
+}
+```
+
+### MessageCard
+
+Rich message cards:
+
+```rust
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MessageCard {
+    /// Card type
+    pub card_type: CardType,
+    /// Card title
+    pub title: Option<String>,
+    /// Card body (markdown)
+    pub body: Option<String>,
+    /// Actions/buttons
+    pub actions: Vec<CardAction>,
+    /// Images
+    pub images: Vec<CardImage>,
+    /// Facts/key-value pairs
+    pub facts: Vec<CardFact>,
+}
+```
+
+## Telemetry Types
+
+### TraceContext
+
+Distributed tracing context:
+
+```rust
+use greentic_types::telemetry::TraceContext;
+
+#[derive(Clone, Debug)]
+pub struct TraceContext {
+    /// Trace ID
+    pub trace_id: TraceId,
+    /// Span ID
+    pub span_id: SpanId,
+    /// Parent span ID
+    pub parent_span_id: Option<SpanId>,
+    /// Trace flags
+    pub flags: TraceFlags,
+    /// Trace state
+    pub state: TraceState,
+}
+```
+
+## Version Type
+
+Semantic versioning:
+
+```rust
+use greentic_types::Version;
+
+// Parse version
+let v = Version::parse("1.2.3")?;
+let v = Version::parse("1.2.3-beta.1+build.456")?;
+
+// Create version
+let v = Version::new(1, 2, 3);
+
+// Compare versions
+assert!(Version::parse("1.2.0")? < Version::parse("1.2.1")?);
+
+// Check compatibility
+let requirement = VersionReq::parse("^1.2.0")?;
+assert!(requirement.matches(&Version::parse("1.2.5")?));
+```
+
+## Usage
+
+### Adding Dependency
+
+```toml
+# Cargo.toml
+[dependencies]
+greentic-types = "0.2"
+```
+
+### Importing Types
+
+```rust
+use greentic_types::{
+    identity::{TenantCtx, TenantId},
+    flow::{Flow, Node},
+    component::ComponentManifest,
+    pack::PackManifest,
+    Version,
+};
+```
+
+## JSON Schemas
+
+All manifest types have corresponding JSON schemas:
+
+| Type | Schema URL |
+|------|------------|
+| ComponentManifest | `https://greentic-ai.github.io/greentic-component/schemas/v1/component.manifest.schema.json` |
+| PackManifest | `https://greentic-ai.github.io/greentic-pack/schemas/v1/pack.manifest.schema.json` |
+| Flow | `https://greentic-ai.github.io/greentic-flow/schemas/ygtc.flow.schema.json` |
+
+## Related
+
+- [Interfaces](/docs/architecture/interfaces) — WIT contract definitions
+- [Components](/docs/architecture/components) — Component architecture
+- [Flows](/docs/architecture/flows) — Flow structure and execution
+- [Packs](/docs/architecture/packs) — Pack bundling

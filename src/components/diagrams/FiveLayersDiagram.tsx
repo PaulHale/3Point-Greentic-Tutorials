@@ -16,9 +16,8 @@ const layers: Layer[] = [
     colour: 'hsl(186, 70%, 55%)',
     items: [
       { name: 'greentic-dev', subtitle: 'CLI' },
-      { name: 'greentic-gui', subtitle: 'Visual Editor' },
+      { name: 'greentic-gui', subtitle: 'GUI Runtime' },
       { name: 'greentic-webchat', subtitle: 'Test Widget' },
-      { name: 'IDE Plugins', subtitle: 'VS Code' },
     ],
   },
   {

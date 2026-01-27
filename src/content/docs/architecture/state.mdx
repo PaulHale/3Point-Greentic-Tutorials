@@ -1,0 +1,346 @@
+---
+title: "State Store"
+description: "Key-value state persistence for flows, sessions, and applications."
+---
+
+import { StateDiagram } from '@/components/diagrams/StateDiagram';
+
+# State Store
+
+The State Store (`greentic-state`) provides key-value persistence for flows, sessions, and applications with multi-tenant isolation.
+
+## Overview
+
+The State Store provides:
+
+- **Multi-tenant Isolation** — Keys are automatically namespaced by tenant
+- **Flexible Backends** — Redis, PostgreSQL, SQLite, or in-memory
+- **TTL Support** — Automatic expiration for cache and temporary data
+- **Atomic Operations** — Compare-and-swap for safe concurrent access
+
+## Architecture
+
+<StateDiagram client:load className="my-8" />
+
+## Core Operations
+
+### Get
+
+Retrieve a value by key:
+
+```rust
+// Simple get
+let value = state.get("user:prefs:u123")?;
+
+// Get with type conversion
+let prefs: UserPrefs = state.get_json("user:prefs:u123")?;
+
+// Get or default
+let theme = state.get_or("theme", "light")?;
+```
+
+### Set
+
+Store a value with optional TTL:
+
+```rust
+// Simple set
+state.set("user:prefs:u123", &prefs_json)?;
+
+// Set with TTL
+state.set_with_ttl("cache:weather", &data, Duration::from_hours(1))?;
+
+// Set if not exists
+state.set_nx("lock:resource", "holder_id")?;
+
+// Set if exists (update only)
+state.set_xx("counter", "42")?;
+```
+
+### Delete
+
+Remove a key:
+
+```rust
+// Simple delete
+state.delete("temp:data")?;
+
+// Delete with pattern
+state.delete_pattern("cache:*")?;
+
+// Delete and return old value
+let old = state.get_del("one-time-token")?;
+```
+
+### List
+
+List keys matching a pattern:
+
+```rust
+// List all keys with prefix
+let keys = state.list("user:prefs:*")?;
+
+// List with pagination
+let page = state.list_paged("cache:*", cursor, limit)?;
+
+// Count keys
+let count = state.count("session:*")?;
+```
+
+## Storage Backends
+
+### Redis
+
+Best for high-performance distributed deployments:
+
+```toml
+[state]
+backend = "redis"
+redis_url = "redis://localhost:6379"
+redis_cluster = false
+key_prefix = "greentic:"
+pool_size = 10
+```
+
+**Features:**
+- Sub-millisecond latency
+- Native TTL support
+- Pub/sub for cache invalidation
+- Clustering for high availability
+
+### PostgreSQL
+
+For environments with existing PostgreSQL:
+
+```toml
+[state]
+backend = "postgres"
+postgres_url = "postgres://user:pass@localhost/greentic"
+table = "kv_store"
+pool_size = 10
+```
+
+**Schema:**
+```sql
+CREATE TABLE kv_store (
+    tenant_id TEXT NOT NULL,
+    key TEXT NOT NULL,
+    value JSONB NOT NULL,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (tenant_id, key)
+);
+
+CREATE INDEX idx_kv_expires ON kv_store (expires_at)
+    WHERE expires_at IS NOT NULL;
+```
+
+### SQLite
+
+For embedded or single-node deployments:
+
+```toml
+[state]
+backend = "sqlite"
+sqlite_path = "/var/greentic/state.db"
+```
+
+### In-Memory
+
+For development and testing:
+
+```toml
+[state]
+backend = "memory"
+max_keys = 100000
+```
+
+## Namespacing
+
+Keys are automatically namespaced by tenant:
+
+```rust
+// When called in tenant "acme-corp" context:
+state.set("user:prefs", data)?;
+// Actually stores: "acme-corp:user:prefs"
+
+// Explicit namespace
+state.set_global("shared:config", data)?;  // No tenant prefix
+```
+
+### Namespace Hierarchy
+
+```
+tenant:{tenant_id}:
+├── flow:{flow_id}:
+│   └── {key}
+├── session:{session_id}:
+│   └── {key}
+├── user:{user_id}:
+│   └── {key}
+└── app:
+    └── {key}
+```
+
+## TTL & Expiration
+
+### Setting TTL
+
+```rust
+// At creation
+state.set_with_ttl("token", value, Duration::from_hours(1))?;
+
+// Update TTL
+state.expire("token", Duration::from_minutes(30))?;
+
+// Remove TTL (persist forever)
+state.persist("token")?;
+
+// Get remaining TTL
+let ttl = state.ttl("token")?;
+```
+
+### Expiration Patterns
+
+| Pattern | TTL | Use Case |
+|---------|-----|----------|
+| **Cache** | 1h-24h | API responses, computed values |
+| **Session** | 24h-7d | User sessions, conversations |
+| **Lock** | 30s-5m | Distributed locks |
+| **Token** | 1h-30d | Auth tokens, API keys |
+| **Permanent** | None | User preferences, configuration |
+
+## Atomic Operations
+
+### Compare-and-Swap
+
+```rust
+// Only update if current value matches
+let updated = state.compare_and_swap(
+    "counter",
+    expected_value,
+    new_value,
+)?;
+
+if !updated {
+    // Value changed since we read it
+}
+```
+
+### Increment/Decrement
+
+```rust
+// Atomic increment
+let new_value = state.incr("page:views")?;
+
+// Increment by amount
+let new_value = state.incr_by("credits", 100)?;
+
+// Decrement
+let new_value = state.decr("inventory:item123")?;
+```
+
+### Append to Lists
+
+```rust
+// Push to list
+state.list_push("events:user123", &event)?;
+
+// Pop from list
+let event = state.list_pop("queue:tasks")?;
+
+// Get list range
+let recent = state.list_range("events:user123", 0, 10)?;
+```
+
+## In Flows
+
+### Using State in Nodes
+
+```yaml
+nodes:
+  check_cache:
+    state.get:
+      key: "cache:weather:{{location}}"
+      output: cached_weather
+    routing:
+      - when: "{{cached_weather}}"
+        to: use_cached
+      - to: fetch_fresh
+
+  store_result:
+    state.set:
+      key: "cache:weather:{{location}}"
+      value: "{{weather_data}}"
+      ttl: 3600  # 1 hour
+    routing:
+      - to: respond
+```
+
+### State Operations
+
+| Operation | Description |
+|-----------|-------------|
+| `state.get` | Retrieve value |
+| `state.set` | Store value |
+| `state.delete` | Remove value |
+| `state.exists` | Check existence |
+| `state.incr` | Atomic increment |
+
+## Observability
+
+### Metrics
+
+| Metric | Description |
+|--------|-------------|
+| `state_operations_total` | Total operations by type |
+| `state_operation_duration_seconds` | Operation latency |
+| `state_keys_count` | Total keys per tenant |
+| `state_memory_bytes` | Memory usage (if applicable) |
+| `state_cache_hits_total` | Cache hit count |
+| `state_cache_misses_total` | Cache miss count |
+
+### Tracing
+
+```json
+{
+  "span_name": "state.get",
+  "attributes": {
+    "state.key": "user:prefs:u123",
+    "state.backend": "redis",
+    "state.hit": true,
+    "state.ttl_remaining_ms": 3600000
+  }
+}
+```
+
+## Best Practices
+
+### Key Design
+
+1. **Use prefixes** — Organize keys hierarchically: `entity:id:attribute`
+2. **Keep keys short** — Balance readability with storage efficiency
+3. **Avoid special characters** — Stick to alphanumeric, colons, underscores
+4. **Document patterns** — Maintain a key naming convention
+
+### Performance
+
+1. **Set appropriate TTLs** — Don't store data forever unnecessarily
+2. **Use pipelining** — Batch multiple operations when possible
+3. **Monitor key counts** — Alert on unexpected growth
+4. **Consider data locality** — Co-locate related data
+
+### Security
+
+1. **Never store secrets** — Use dedicated secret management
+2. **Sanitise keys** — Validate user-provided key components
+3. **Audit access** — Log sensitive key operations
+4. **Encrypt at rest** — Enable backend encryption
+
+## Related
+
+- [Session](/docs/architecture/session) — Session management
+- [Runner](/docs/architecture/runner) — Production execution host
+- [Flows](/docs/architecture/flows) — Flow execution model
+- [Multi-tenancy](/docs/architecture/multi-tenancy) — Tenant isolation

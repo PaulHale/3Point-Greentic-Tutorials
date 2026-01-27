@@ -1,0 +1,376 @@
+---
+title: OAuth
+description: OAuth broker for delegated access to third-party APIs in Greentic digital workers.
+order: 1
+---
+
+import { OAuthArchitectureDiagram } from '@/components/diagrams/OAuthArchitectureDiagram';
+
+# OAuth
+
+The Greentic OAuth Broker manages delegated access to third-party APIs. It performs OAuth handshakes, stores encrypted credentials, and provides HTTP, NATS, and WIT contracts for token management.
+
+## Overview
+
+The OAuth broker enables digital workers to:
+
+- Authenticate users via OAuth flows (Microsoft, Google, GitHub, Slack, etc.)
+- Store and refresh tokens securely
+- Make signed API requests on behalf of users
+- Manage multi-tenant credential isolation
+
+## Architecture
+
+<OAuthArchitectureDiagram client:visible className="my-6" />
+
+**Flow:**
+
+1. App requests OAuth flow for a tenant/provider
+2. Broker generates PKCE challenge and signed state
+3. User completes consent at provider
+4. Broker exchanges code for tokens
+5. Tokens encrypted and stored
+6. App receives signed token handle for future requests
+
+## Supported Providers
+
+### Automated Providers
+
+Full provisioning support - can create apps, manage redirects, and rotate secrets automatically.
+
+| Provider | Feature Flag | Capabilities |
+|----------|--------------|--------------|
+| Microsoft Entra ID | `admin-ms` (default) | App creation, redirect URIs, secrets, webhooks, scopes |
+| Okta | `admin-okta` | App creation, redirect URIs, secrets, scopes |
+| Auth0 | `admin-auth0` | App creation, redirect URIs, secrets, scopes |
+| Keycloak | `admin-keycloak` | App creation, redirect URIs, secrets, scopes |
+
+### Guided Providers
+
+Manual setup required - broker stores credentials but cannot provision apps.
+
+| Provider | Feature Flag | Capabilities |
+|----------|--------------|--------------|
+| Google | `admin-google` | Manual setup (client ID/secret provided) |
+| GitHub | `admin-github` | Webhook support, manual app setup |
+| Slack | `admin-slack` | Webhook support, manual app setup |
+
+**Note:** LDAP, SAML 2.0, and legacy ADFS are not currently supported.
+
+## HTTP API
+
+### Start OAuth Flow
+
+```bash
+curl -X POST http://localhost:8080/oauth/start \
+  -H "content-type: application/json" \
+  -d '{
+    "env": "prod",
+    "tenant": "acme",
+    "provider": "msgraph",
+    "team": "ops",
+    "owner_kind": "user",
+    "owner_id": "user-123",
+    "scopes": ["offline_access", "Mail.Read"],
+    "redirect_uri": "https://app.greentic.ai/callback"
+  }'
+```
+
+**Response:**
+```json
+{
+  "start_url": "https://broker/authorize/abc123"
+}
+```
+
+### Get Access Token
+
+```bash
+curl -X POST http://localhost:8080/token \
+  -H "content-type: application/json" \
+  -d '{
+    "token_handle": "<jws>",
+    "force_refresh": false
+  }'
+```
+
+**Response:**
+```json
+{
+  "access_token": "eyJ...",
+  "expires_at": 1700000000
+}
+```
+
+### Resource Token (Client Credentials)
+
+```bash
+curl -X POST http://localhost:8080/resource-token \
+  -H "content-type: application/json" \
+  -d '{
+    "env": "dev",
+    "tenant": "acme",
+    "team": "ops",
+    "resource_id": "msgraph-email",
+    "scopes": ["https://graph.microsoft.com/.default"]
+  }'
+```
+
+### Signed Fetch
+
+Make authenticated requests through the broker:
+
+```bash
+curl -X POST http://localhost:8080/signed-fetch \
+  -H "content-type: application/json" \
+  -d '{
+    "token_handle": "<jws>",
+    "method": "GET",
+    "url": "https://graph.microsoft.com/v1.0/me",
+    "headers": []
+  }'
+```
+
+**Response:**
+```json
+{
+  "status": 200,
+  "headers": [...],
+  "body": "eyJ...",
+  "body_encoding": "base64"
+}
+```
+
+### Connection Status
+
+```bash
+curl http://localhost:8080/status/prod/acme/msgraph?team=ops
+```
+
+**Response:**
+```json
+[
+  {
+    "provider_account_id": "user@example.com",
+    "visibility": "team",
+    "created_at": "2024-01-15T10:00:00Z"
+  }
+]
+```
+
+## SDK Usage
+
+### Rust SDK
+
+```rust
+use greentic_oauth_sdk::Client;
+
+let client = Client::new_from_env();
+
+// Start OAuth flow
+let start = client.initiate_auth(Init {
+    env: "prod",
+    tenant: "acme",
+    team: Some("netops"),
+    provider: "msgraph",
+    flow_id: "7f9c",
+    scopes: vec!["Chat.ReadWrite".into()],
+    owner_kind: OwnerKind::User,
+    owner_id: Some("user-123".into()),
+    redirect: Some("https://app.greentic.ai/callback".into()),
+})?;
+
+// Send start.url to user...
+
+// Await completion
+let res = client.await_result("acme", "prod", Some("netops"), "msgraph", "7f9c").await?;
+let handle = res.token_handle.unwrap();
+
+// Make signed requests
+let resp = client.signed_fetch(
+    &handle,
+    "GET",
+    "https://graph.microsoft.com/v1.0/me",
+    None
+).await?;
+```
+
+### Token Validation
+
+Validate incoming bearer tokens:
+
+```rust
+use greentic_oauth_sdk::{TokenValidationConfig, validate_bearer_token};
+
+let cfg = TokenValidationConfig::new(
+    "https://issuer.example.com/.well-known/jwks.json".parse()?,
+    "https://issuer.example.com/",
+    "api://aud",
+).with_required_scopes(vec!["repo.read".into()]);
+
+let (claims, tenant_ctx) = validate_bearer_token(token, &cfg).await?;
+```
+
+## NATS Contract
+
+### Start Flow
+
+**Subject:** `oauth.req.{tenant}.{env}.{team}.{provider}.{flowId}`
+
+```json
+{
+  "owner_kind": "user",
+  "owner_id": "user-123",
+  "scopes": ["offline_access", "Mail.Read"],
+  "visibility": "team",
+  "redirect_uri": "https://app.greentic.ai/callback"
+}
+```
+
+### Token Retrieval
+
+**Subject:** `oauth.token.get`
+
+```json
+{
+  "token_handle": "<jws>",
+  "force_refresh": false
+}
+```
+
+### Emitted Events
+
+| Subject | Description |
+|---------|-------------|
+| `oauth.res.{tenant}.{env}.{team}.{provider}.{flowId}` | Flow completion |
+| `oauth.audit.{env}.{tenant}.{team}.{provider}.{action}` | Audit events |
+| `auth.success` / `auth.failure` | Callback outcomes |
+
+## Secrets Store Layout
+
+Sensitive values are stored via `greentic:secrets-store@1.0.0`:
+
+```
+oauth/security/jws-ed25519-base64      # Signing key
+oauth/security/jwe-aes256-gcm-base64   # Encryption key
+oauth/security/hmac-base64             # CSRF secret
+
+oauth/providers/microsoft/client-secret
+oauth/providers/generic-oidc/client-secret
+
+messaging/global/{provider}/client_id
+messaging/global/{provider}/client_secret
+messaging/tenant/{tenant}/{provider}/refresh_token
+```
+
+## Multi-Tenancy
+
+The broker uses a hierarchical model:
+
+| Level | Description |
+|-------|-------------|
+| `env` | Deployment environment (prod, staging) |
+| `tenant` | Customer identifier |
+| `team` | Optional subdivision within tenant |
+| `owner` | User or service principal |
+
+Token storage path: `envs/{env}/tenants/{tenant}/[teams/{team}/]providers/{provider}/{owner_kind}-{owner_id}.json`
+
+## Self-Describing Discovery
+
+The broker publishes discovery endpoints:
+
+| Endpoint | Description |
+|----------|-------------|
+| `/.well-known/greentic-oauth` | Feature manifest |
+| `/oauth/discovery/providers` | Provider catalogue |
+| `/oauth/discovery/{tenant}/providers/{provider}` | Merged descriptor |
+| `/oauth/discovery/{tenant}/providers/{provider}/requirements` | Flow requirements |
+
+## Admin Provisioning
+
+### CLI Workflow
+
+```bash
+# List available provisioners
+greentic-oauth-admin providers
+
+# Start admin auth flow
+greentic-oauth-admin start --provider msgraph --tenant global
+
+# Apply desired state
+greentic-oauth-admin ensure --provider okta --tenant acme \
+  --file desired_app.json
+
+# Preview changes
+greentic-oauth-admin plan --provider okta --tenant acme \
+  --file desired_app.json
+```
+
+### Microsoft Teams
+
+```bash
+# Plan Teams tenant setup
+greentic-oauth-admin teams plan --tenant acme --file teams_tenant.json
+
+# Apply Teams configuration
+greentic-oauth-admin teams ensure --tenant acme --file teams_tenant.json
+
+# Get current spec
+greentic-oauth-admin teams get-spec --tenant acme
+```
+
+## Security
+
+### Token Handles
+
+- JWS-signed for origin verification
+- Contains tenant context and expiry
+- Cannot be forged without signing key
+
+### Token Storage
+
+- JWE-encrypted before persistence
+- Keys stored separately from encrypted data
+- Automatic refresh before expiry
+
+### CSRF Protection
+
+- Signed state tokens for OAuth flows
+- PKCE (S256) for all authorization code flows
+- Rate limiting on start/callback endpoints
+
+## Telemetry
+
+Configure via environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TELEMETRY_EXPORT` | `otlp-grpc` | Export strategy |
+| `OTLP_ENDPOINT` | `http://otel-collector:4317` | Collector endpoint |
+| `TELEMETRY_SAMPLING` | `parent` | Sampling strategy |
+
+### Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `auth.start.created` | Counter | OAuth flows started |
+| `auth.callback.success` | Counter | Successful callbacks |
+| `auth.callback.failure` | Counter | Failed callbacks |
+| `auth.callback.latency_ms` | Histogram | Flow completion time |
+
+## Troubleshooting
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `oauth base url not configured` | Missing `OAUTH_BASE_URL` | Set externally reachable HTTPS URL |
+| `redirect_uri not permitted` | Redirect not whitelisted | Add to `OAUTH_REDIRECT_WHITELIST` |
+| `authorization session expired` | Session timeout | Re-initiate flow (default 15 min) |
+| `state validation failed` | Tampered or reused state | Start fresh flow |
+| `rate limit exceeded` | Too many requests | Implement backoff |
+
+## Next Steps
+
+- **[Events](/docs/events/overview)** — Event-driven triggers
+- **[Messaging](/docs/messaging/overview)** — Channel integrations
+- **[Security](/docs/architecture/security)** — Security architecture

@@ -1,0 +1,377 @@
+---
+title: "Distributor"
+description: "Pack distribution service for delivering signed packs from registries to runners."
+---
+
+import { DistributorDiagram } from '@/components/diagrams/DistributorDiagram';
+
+# Distributor
+
+The Distributor (`greentic-distributor-client`) handles pack distribution from registries to runners, with caching, verification, and routing.
+
+## Overview
+
+The Distributor provides:
+
+- **Pack Caching** — Local cache reduces registry load and latency
+- **Signature Verification** — Validates pack signatures before distribution
+- **Tenant Routing** — Routes packs to appropriate runners
+- **Update Notifications** — Push updates when new versions are available
+
+## Architecture
+
+<DistributorDiagram client:load className="my-8" />
+
+## Core Functions
+
+### Pack Fetching
+
+The distributor client fetches packs from various sources:
+
+```rust
+use greentic_distributor_client::DistributorClient;
+
+// Create client
+let client = DistributorClient::new(config)?;
+
+// Fetch a pack
+let pack = client.fetch("my-org/my-pack:1.0.0").await?;
+
+// Fetch with specific registry
+let pack = client.fetch_from(
+    "registry.greentic.ai",
+    "my-org/my-pack:latest"
+).await?;
+```
+
+### Caching
+
+Packs are cached locally to improve performance:
+
+```rust
+// Check if pack is cached
+if client.is_cached("my-pack:1.0.0") {
+    let pack = client.get_cached("my-pack:1.0.0")?;
+} else {
+    let pack = client.fetch_and_cache("my-pack:1.0.0").await?;
+}
+
+// Force refresh (bypass cache)
+let pack = client.fetch_fresh("my-pack:1.0.0").await?;
+
+// Clear cache
+client.clear_cache()?;
+client.clear_cache_older_than(Duration::from_days(7))?;
+```
+
+### Signature Verification
+
+All packs are verified before use:
+
+```rust
+// Verification happens automatically on fetch
+let pack = client.fetch("my-pack:1.0.0").await?; // Verified
+
+// Manual verification
+let is_valid = client.verify(&pack, &trusted_keys)?;
+
+// Get signature details
+let sig_info = pack.signature_info()?;
+println!("Signed by: {}", sig_info.signer);
+println!("Signed at: {}", sig_info.timestamp);
+```
+
+## Configuration
+
+### Client Configuration
+
+```toml
+# distributor.toml
+
+[client]
+# Default registry
+default_registry = "registry.greentic.ai"
+
+# Request timeout
+timeout = "30s"
+
+# Retry configuration
+max_retries = 3
+retry_delay = "1s"
+
+[cache]
+# Cache directory
+path = "/var/greentic/cache"
+
+# Maximum cache size
+max_size = "10GB"
+
+# Cache TTL (time to consider cached pack fresh)
+ttl = "1h"
+
+# Cleanup interval
+cleanup_interval = "6h"
+
+[verification]
+# Require signature verification
+require_signatures = true
+
+# Trusted signers
+trusted_keys_path = "/etc/greentic/trusted-keys/"
+
+# Allow unsigned packs (development only)
+allow_unsigned = false
+
+[registries.greentic]
+url = "registry.greentic.ai"
+auth = "token"
+token_env = "GREENTIC_REGISTRY_TOKEN"
+
+[registries.internal]
+url = "registry.internal.company.com"
+auth = "basic"
+username_env = "INTERNAL_REGISTRY_USER"
+password_env = "INTERNAL_REGISTRY_PASS"
+```
+
+## Registry Sources
+
+### OCI Registry
+
+Standard OCI-compliant registries:
+
+```toml
+[registries.oci]
+type = "oci"
+url = "ghcr.io/my-org"
+auth = "token"
+token_env = "GITHUB_TOKEN"
+```
+
+### HTTPS
+
+Simple HTTPS pack hosting:
+
+```toml
+[registries.https]
+type = "https"
+url = "https://packs.example.com"
+index_path = "/index.json"
+auth = "bearer"
+token_env = "PACK_TOKEN"
+```
+
+### S3-Compatible
+
+AWS S3 or compatible storage:
+
+```toml
+[registries.s3]
+type = "s3"
+bucket = "my-greentic-packs"
+region = "eu-west-1"
+prefix = "production/"
+```
+
+## Integration with Runner
+
+### Automatic Pack Loading
+
+The runner uses the distributor client internally:
+
+```toml
+# runner.toml
+
+[[pack_sources]]
+type = "distributor"
+registry = "registry.greentic.ai"
+poll_interval = "5m"
+patterns = ["my-org/*"]
+```
+
+### Manual Integration
+
+```rust
+use greentic_distributor_client::DistributorClient;
+use greentic_runner::Runner;
+
+// Create distributor client
+let distributor = DistributorClient::new(config)?;
+
+// Create runner with distributor
+let runner = Runner::builder()
+    .distributor(distributor)
+    .build()?;
+
+// Runner automatically fetches packs via distributor
+runner.load_pack("my-org/my-pack:1.0.0").await?;
+```
+
+## Update Notifications
+
+### Webhook Notifications
+
+Configure webhooks to notify runners of updates:
+
+```toml
+[notifications]
+type = "webhook"
+
+[[notifications.endpoints]]
+url = "https://runner1.internal/hooks/pack-update"
+secret_env = "WEBHOOK_SECRET"
+
+[[notifications.endpoints]]
+url = "https://runner2.internal/hooks/pack-update"
+secret_env = "WEBHOOK_SECRET"
+```
+
+### Pub/Sub
+
+Use NATS or similar for real-time updates:
+
+```toml
+[notifications]
+type = "nats"
+url = "nats://localhost:4222"
+subject = "greentic.packs.updates"
+```
+
+### Polling
+
+Runners can poll for updates:
+
+```rust
+// In runner configuration
+let watcher = PackWatcher::new()
+    .distributor(distributor)
+    .poll_interval(Duration::from_secs(300))
+    .on_update(|pack_id, version| {
+        runner.reload_pack(pack_id, version)
+    })
+    .start();
+```
+
+## CLI Usage
+
+### Fetch Packs
+
+```bash
+# Fetch a pack
+greentic-distributor fetch my-org/my-pack:1.0.0
+
+# Fetch to specific location
+greentic-distributor fetch my-org/my-pack:1.0.0 --output ./packs/
+
+# Fetch from specific registry
+greentic-distributor fetch my-org/my-pack:1.0.0 \
+  --registry registry.greentic.ai
+```
+
+### Cache Management
+
+```bash
+# List cached packs
+greentic-distributor cache list
+
+# Show cache statistics
+greentic-distributor cache stats
+
+# Clear cache
+greentic-distributor cache clear
+
+# Clear old entries
+greentic-distributor cache clean --older-than 7d
+```
+
+### Verification
+
+```bash
+# Verify a pack
+greentic-distributor verify ./my-pack.gtpack
+
+# Verify with specific keys
+greentic-distributor verify ./my-pack.gtpack \
+  --trusted-keys ./keys/
+```
+
+## Observability
+
+### Metrics
+
+| Metric | Description |
+|--------|-------------|
+| `distributor_fetches_total` | Total pack fetches |
+| `distributor_fetch_duration_seconds` | Fetch latency |
+| `distributor_cache_hits_total` | Cache hit count |
+| `distributor_cache_misses_total` | Cache miss count |
+| `distributor_cache_size_bytes` | Current cache size |
+| `distributor_verification_failures_total` | Failed verifications |
+
+### Logging
+
+```rust
+// Enable debug logging
+RUST_LOG=greentic_distributor_client=debug
+
+// Log output example
+[DEBUG] Fetching pack my-org/my-pack:1.0.0
+[DEBUG] Cache miss, fetching from registry.greentic.ai
+[DEBUG] Downloaded 2.3MB in 450ms
+[DEBUG] Signature verified: signer=ai.greentic.official
+[DEBUG] Pack cached at /var/greentic/cache/my-org/my-pack/1.0.0
+```
+
+## Security Considerations
+
+### Signature Verification
+
+Always verify signatures in production:
+
+```toml
+[verification]
+require_signatures = true
+allow_unsigned = false
+```
+
+### Network Security
+
+Use TLS for all registry connections:
+
+```toml
+[tls]
+# Require TLS
+require_tls = true
+
+# Custom CA for internal registries
+ca_cert = "/etc/greentic/ca.crt"
+
+# Client certificate (mTLS)
+client_cert = "/etc/greentic/client.crt"
+client_key = "/etc/greentic/client.key"
+```
+
+### Access Control
+
+Restrict registry access:
+
+```toml
+[access]
+# Only allow specific registries
+allowed_registries = [
+    "registry.greentic.ai",
+    "registry.internal.company.com"
+]
+
+# Block specific patterns
+blocked_patterns = [
+    "untrusted-org/*"
+]
+```
+
+## Related
+
+- [Supply Chain](/docs/architecture/supply-chain) — Full supply chain overview
+- [Packs](/docs/architecture/packs) — Pack structure and building
+- [Runner](/docs/architecture/runner) — Production execution host
+- [Security](/docs/architecture/security) — Security architecture

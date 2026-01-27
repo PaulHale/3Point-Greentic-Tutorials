@@ -15,7 +15,7 @@ const layers: Layer[] = [
     id: 'dev-experience',
     label: 'Developer Experience',
     description: 'Tools for building and testing',
-    items: ['greentic-dev', 'greentic-gui', 'greentic-webchat', 'IDE Plugins'],
+    items: ['greentic-dev', 'greentic-gui', 'greentic-webchat'],
     color: '#22c55e',
     glowColor: 'rgba(34, 197, 94, 0.6)',
   },
@@ -71,7 +71,7 @@ interface FiveLayersCanvasProps {
 
 // Layer descriptions for detail panel
 const layerDescriptions: Record<string, string> = {
-  'dev-experience': 'The Developer Experience layer provides all the tools developers need to build, test, and debug their digital workers. This includes the CLI for command-line workflows, GUI editor for visual flow design, WebChat for interactive testing, and IDE plugins for VS Code and other editors.',
+  'dev-experience': 'The Developer Experience layer provides all the tools developers need to build, test, and debug their digital workers. This includes the CLI for command-line workflows, GUI runtime for visual flow interactions, and WebChat for interactive testing.',
   'supply-chain': 'The Supply Chain layer handles the entire lifecycle of packs from build to deployment. The Repo compiles and validates components, the Store acts as a catalog for discovery, and the Distributor delivers signed packs to runners with integrity verification.',
   'runtime': 'The Runtime layer executes flows and manages state. The Runner orchestrates component execution in Wasm sandboxes, Session tracks conversation context, State provides persistent key-value storage, and MCP Exec handles AI tool calls.',
   'integration': 'The Integration layer connects digital workers to the outside world. Messaging supports Teams, Slack, WhatsApp, Telegram, WebChat, and Webex. Events handles webhooks and scheduled triggers. OAuth Broker manages secure authentication with external APIs.',
