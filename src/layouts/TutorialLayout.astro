@@ -1,0 +1,148 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import Header from '@/components/layout/Header.astro';
+import Footer from '@/components/layout/Footer.astro';
+import { tutorialItems } from '@/lib/navigation';
+
+interface Props {
+  title: string;
+  description?: string;
+  image?: string;
+  frontmatter?: {
+    title: string;
+    description?: string;
+    difficulty?: 'beginner' | 'intermediate' | 'advanced';
+    duration?: string;
+    prerequisites?: string[];
+  };
+}
+
+const { title, description, image, frontmatter } = Astro.props;
+const pageTitle = frontmatter?.title || title;
+const pageDescription = frontmatter?.description || description;
+const currentPath = Astro.url.pathname;
+
+const difficultyColors = {
+  beginner: 'bg-green-500/20 text-green-500',
+  intermediate: 'bg-yellow-500/20 text-yellow-500',
+  advanced: 'bg-red-500/20 text-red-500',
+};
+---
+
+<BaseLayout title={pageTitle} description={pageDescription} image={image}>
+  <div class="flex min-h-screen flex-col">
+    <Header />
+    <div class="flex-1">
+      <div class="container mx-auto max-w-7xl px-4 py-8 md:px-6">
+        <div class="flex gap-8 lg:gap-12">
+          <!-- Tutorial sidebar -->
+          <div class="hidden w-64 shrink-0 lg:block">
+            <aside class="sticky top-20 h-[calc(100vh-5rem)] overflow-y-auto pb-8">
+              <nav class="space-y-2">
+                <h4 class="font-semibold text-sm text-foreground px-3 mb-4">Tutorials</h4>
+                {
+                  tutorialItems.map((item) => (
+                    <a
+                      href={item.href}
+                      class:list={[
+                        'block px-3 py-2 text-sm rounded-md transition-colors',
+                        currentPath === item.href
+                          ? 'bg-primary/10 text-primary font-medium'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                      ]}
+                    >
+                      {item.title}
+                    </a>
+                  ))
+                }
+              </nav>
+            </aside>
+          </div>
+
+          <!-- Main content -->
+          <main class="min-w-0 flex-1">
+            {
+              frontmatter && (
+                <header class="mb-8 border-b border-border pb-8">
+                  <h1 class="text-4xl font-bold text-foreground mb-4">{pageTitle}</h1>
+                  {pageDescription && <p class="text-lg text-muted-foreground mb-4">{pageDescription}</p>}
+                  <div class="flex flex-wrap gap-3">
+                    {frontmatter.difficulty && (
+                      <span class={`px-3 py-1 rounded-full text-sm font-medium ${difficultyColors[frontmatter.difficulty]}`}>
+                        {frontmatter.difficulty.charAt(0).toUpperCase() + frontmatter.difficulty.slice(1)}
+                      </span>
+                    )}
+                    {frontmatter.duration && (
+                      <span class="px-3 py-1 rounded-full text-sm font-medium bg-muted text-muted-foreground">
+                        {frontmatter.duration}
+                      </span>
+                    )}
+                  </div>
+                  {frontmatter.prerequisites && frontmatter.prerequisites.length > 0 && (
+                    <div class="mt-4">
+                      <h4 class="text-sm font-semibold text-foreground mb-2">Prerequisites</h4>
+                      <ul class="text-sm text-muted-foreground list-disc list-inside">
+                        {frontmatter.prerequisites.map((prereq) => (
+                          <li>{prereq}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </header>
+              )
+            }
+            <article class="prose-greentic max-w-none">
+              <slot />
+            </article>
+          </main>
+
+          <!-- Progress tracker -->
+          <div class="hidden w-56 shrink-0 xl:block">
+            <div class="sticky top-20">
+              <h4 class="mb-4 text-sm font-semibold text-foreground">Progress</h4>
+              <nav id="tutorial-steps" class="text-sm space-y-2">
+                <!-- Steps will be populated by client-side script -->
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <Footer />
+  </div>
+</BaseLayout>
+
+<script>
+  // Generate step tracker from h2 headings
+  function generateSteps() {
+    const article = document.querySelector('article');
+    const stepsNav = document.getElementById('tutorial-steps');
+    if (!article || !stepsNav) return;
+
+    const headings = article.querySelectorAll('h2');
+    if (headings.length === 0) return;
+
+    headings.forEach((heading, index) => {
+      const div = document.createElement('div');
+      div.className = 'flex items-center gap-2';
+
+      const circle = document.createElement('div');
+      circle.className = 'w-6 h-6 rounded-full border-2 border-border flex items-center justify-center text-xs font-medium';
+      circle.textContent = String(index + 1);
+
+      const a = document.createElement('a');
+      if (!heading.id) {
+        heading.id = heading.textContent?.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '') || '';
+      }
+      a.href = `#${heading.id}`;
+      a.textContent = heading.textContent;
+      a.className = 'text-muted-foreground hover:text-foreground transition-colors truncate';
+
+      div.appendChild(circle);
+      div.appendChild(a);
+      stepsNav.appendChild(div);
+    });
+  }
+
+  generateSteps();
+</script>

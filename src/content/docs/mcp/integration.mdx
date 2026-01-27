@@ -1,0 +1,342 @@
+---
+title: "MCP Integration"
+description: "Connecting Model Context Protocol to Greentic flows"
+---
+
+# MCP Integration
+
+Learn how to integrate MCP (Model Context Protocol) into your Greentic flows for AI-powered automation.
+
+## Overview
+
+MCP integration in Greentic enables:
+
+- Tool calling from LLM components
+- Context injection from various sources
+- Prompt management and templates
+- Multi-model orchestration
+
+## Basic Integration
+
+### Enable MCP in a Flow
+
+```yaml
+id: mcp-enabled-flow
+type: messaging
+start: process
+
+mcp:
+  enabled: true
+  executor: greentic-mcp
+
+nodes:
+  process:
+    component.llm-openai:
+      config:
+        model: gpt-4
+        mcp: true  # Enable MCP for this node
+```
+
+### With Tools
+
+```yaml
+mcp:
+  enabled: true
+  tools:
+    - name: search_knowledge
+      component: component.vector-search
+      config:
+        store: docs
+    - name: get_user
+      component: component.database
+      config:
+        query: "SELECT * FROM users WHERE id = :id"
+
+nodes:
+  assist:
+    component.llm-openai:
+      config:
+        model: gpt-4
+        tools:
+          - search_knowledge
+          - get_user
+```
+
+## Context Sources
+
+### Inject Context
+
+Provide context to the LLM from various sources:
+
+```yaml
+mcp:
+  context:
+    - source: state
+      key: user_profile
+    - source: session
+      key: conversation_history
+    - source: retrieval
+      component: component.vector-search
+      config:
+        query: "{{message.text}}"
+        top_k: 3
+
+nodes:
+  respond:
+    component.llm-openai:
+      config:
+        model: gpt-4
+        system: |
+          User profile: {{context.user_profile}}
+
+          Relevant documents:
+          {{#each context.retrieval}}
+          - {{this.content}}
+          {{/each}}
+```
+
+### Dynamic Context
+
+Load context based on conversation:
+
+```yaml
+nodes:
+  load-context:
+    component.mcp-context:
+      config:
+        sources:
+          - type: vector
+            query: "{{message.text}}"
+            store: knowledge-base
+          - type: api
+            url: "https://api.internal/user/{{message.from.id}}"
+    routing:
+      next: respond
+
+  respond:
+    component.llm-openai:
+      config:
+        model: gpt-4
+        context: "{{state.mcp_context}}"
+```
+
+## Prompt Management
+
+### Prompt Templates
+
+Define reusable prompts:
+
+```yaml
+mcp:
+  prompts:
+    support-agent: |
+      You are a helpful IT support agent for {{tenant.name}}.
+
+      Guidelines:
+      - Be concise and professional
+      - Ask clarifying questions when needed
+      - Use tools to look up information
+      - Escalate complex issues to humans
+
+    classifier: |
+      Classify the user's intent into one of:
+      - technical_issue
+      - billing_question
+      - feature_request
+      - general_inquiry
+
+      Respond with only the classification.
+
+nodes:
+  classify:
+    component.llm-openai:
+      config:
+        model: gpt-4
+        system: "{{prompts.classifier}}"
+
+  assist:
+    component.llm-openai:
+      config:
+        model: gpt-4
+        system: "{{prompts.support-agent}}"
+```
+
+### Prompt Versioning
+
+```yaml
+mcp:
+  prompts:
+    support-agent:
+      version: "2.1"
+      template: |
+        You are a support agent...
+      variables:
+        - tenant.name
+        - user.tier
+```
+
+## Multi-Model Orchestration
+
+### Model Routing
+
+Use different models for different tasks:
+
+```yaml
+nodes:
+  classify:
+    component.llm-openai:
+      config:
+        model: gpt-3.5-turbo  # Fast, cheap for classification
+        system: "Classify intent..."
+    routing:
+      conditions:
+        - when: "{{state.intent}} == 'complex'"
+          next: complex-reasoning
+      default: simple-response
+
+  complex-reasoning:
+    component.llm-anthropic:
+      config:
+        model: claude-3-opus  # More capable for complex tasks
+        system: "..."
+
+  simple-response:
+    component.llm-openai:
+      config:
+        model: gpt-3.5-turbo  # Efficient for simple responses
+```
+
+### Model Fallback
+
+```yaml
+nodes:
+  generate:
+    component.llm-with-fallback:
+      config:
+        primary:
+          provider: openai
+          model: gpt-4
+        fallback:
+          provider: anthropic
+          model: claude-3-sonnet
+        retry:
+          max_attempts: 3
+          backoff_ms: 1000
+```
+
+## Streaming Responses
+
+Enable streaming for better UX:
+
+```yaml
+nodes:
+  stream-response:
+    component.llm-openai:
+      config:
+        model: gpt-4
+        stream: true
+        on_chunk: |
+          # Send each chunk to user immediately
+          emit_message(chunk.content)
+```
+
+## Memory and History
+
+### Conversation Memory
+
+```yaml
+mcp:
+  memory:
+    type: conversation
+    max_messages: 20
+    summarize_after: 10
+
+nodes:
+  chat:
+    component.llm-openai:
+      config:
+        model: gpt-4
+        memory: true  # Include conversation history
+```
+
+### Long-term Memory
+
+```yaml
+mcp:
+  memory:
+    type: hybrid
+    short_term:
+      max_messages: 10
+    long_term:
+      store: vector
+      component: component.vector-store
+
+nodes:
+  remember:
+    component.mcp-memory:
+      config:
+        action: store
+        content: "{{message.text}}"
+        metadata:
+          user_id: "{{message.from.id}}"
+          topic: "{{state.current_topic}}"
+```
+
+## Error Handling
+
+### Graceful Degradation
+
+```yaml
+nodes:
+  with-fallback:
+    component.llm-openai:
+      config:
+        model: gpt-4
+      on_error:
+        - type: rate_limit
+          action: retry
+          delay: 5000
+        - type: timeout
+          action: fallback
+          node: simple-response
+        - type: any
+          action: respond
+          message: "I'm having trouble processing that. Let me try again."
+```
+
+## Monitoring
+
+### MCP Metrics
+
+Track MCP performance:
+
+```yaml
+mcp:
+  telemetry:
+    enabled: true
+    metrics:
+      - tool_calls
+      - latency
+      - token_usage
+      - error_rate
+```
+
+Metrics available:
+- `mcp_tool_calls_total` - Total tool invocations
+- `mcp_tool_latency_ms` - Tool execution time
+- `mcp_llm_tokens_total` - Token consumption
+- `mcp_errors_total` - Error count by type
+
+## Best Practices
+
+1. **Start simple** - Add MCP complexity incrementally
+2. **Monitor costs** - Track token usage across models
+3. **Cache results** - Cache tool results when appropriate
+4. **Handle failures** - Always have fallback paths
+5. **Test thoroughly** - LLM outputs can be unpredictable
+
+## Related
+
+- [MCP Overview](/docs/mcp/overview) - MCP concepts
+- [MCP Tools](/docs/mcp/tools) - Creating and using tools
+- [Flows](/docs/architecture/flows) - Flow fundamentals

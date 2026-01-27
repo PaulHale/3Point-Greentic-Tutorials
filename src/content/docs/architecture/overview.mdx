@@ -1,0 +1,133 @@
+---
+title: Architecture Overview
+description: Understand the Greentic platform architecture and how its layers work together.
+order: 1
+---
+
+# Architecture Overview
+
+Greentic is designed as a layered architecture with clear separation of concerns. Each layer has a specific responsibility and communicates with adjacent layers through well-defined interfaces.
+
+## The Five Layers
+
+import { FiveLayersDiagram } from '@/components/diagrams/FiveLayersDiagram';
+
+<FiveLayersDiagram client:load className="my-8" />
+
+## Layer Responsibilities
+
+### Foundation Layer
+
+The foundation layer provides shared primitives used by all other layers:
+
+- **greentic-types** — Core data structures: `TenantCtx`, manifests, envelopes
+- **greentic-interfaces** — WIT packages and Rust bindings for the component model
+- **greentic-telemetry** — OpenTelemetry integration for traces, metrics, logs
+
+These are the building blocks that ensure consistency across the platform.
+
+### Integration Layer
+
+The integration layer connects Greentic to the outside world:
+
+- **Messaging** — Six channel adapters (Teams, Slack, Telegram, WhatsApp, WebChat, Webex)
+- **Events** — Webhook triggers and event-based flow activation
+- **OAuth Broker** — Manages OAuth flows for component authentication with external services
+
+### Runtime Layer
+
+The runtime layer executes flows and manages state:
+
+- **Runner** — Orchestrates flow execution, invoking components in sequence
+- **Session** — Tracks conversation state across multiple interactions
+- **State** — Key-value storage abstraction for flow data
+- **MCP Exec** — Executes Model Context Protocol tool calls
+
+### Supply Chain Layer
+
+The supply chain layer handles the lifecycle from build to deployment:
+
+- **Repo (build)** — Compiles components, validates flows, creates packs
+- **Store (catalog)** — Stores and indexes packs with metadata
+- **Distributor** — Distributes packs to runners with version management
+
+### Developer Experience Layer
+
+The developer experience layer provides tools for building and testing:
+
+- **greentic-dev** — CLI for flow validation, pack building, local running
+- **greentic-gui** — Visual flow editor (coming soon)
+- **greentic-webchat** — Testing widget for development
+- **IDE plugins** — Editor support for YGTC files
+
+## Design Principles
+
+The architecture follows these core principles from the [Design Manifesto](/docs/architecture/design-manifesto):
+
+### Contract Before Code
+
+Every interface is defined in WIT or JSON Schema before implementation. This ensures:
+
+- Clear boundaries between components
+- Versioned, evolvable APIs
+- Generated bindings for type safety
+
+### Multi-Tenant First
+
+`TenantCtx` is propagated through every API call. This provides:
+
+- Complete isolation between tenants
+- Per-tenant configuration and secrets
+- Audit trails and compliance
+
+### Manifest = Truth
+
+Components and packs are self-describing through manifests:
+
+- Runtime doesn't need out-of-band configuration
+- Validation happens at build time
+- Discovery is automatic
+
+### Runtime Agnostic
+
+The same contracts work across different execution modes:
+
+- In-process for testing
+- Wasm sandbox for production
+- Remote for scaling
+- Sidecar for special requirements
+
+### Security and Telemetry Built-in
+
+Security and observability are not optional:
+
+- mTLS between all services
+- OpenTelemetry traces on every flow execution
+- Audit logging for compliance
+
+## Data Flow
+
+Here's how a message flows through the system:
+
+1. **User** sends message to a **Channel** (e.g., Teams)
+2. **Messaging Gateway** receives and normalises the message
+3. **Router** looks up the appropriate flow based on tenant and context
+4. **Runner** executes the flow, invoking components
+5. **Components** process data, may call MCP tools
+6. **Response** flows back through the gateway to the user
+
+```
+User → Channel → Gateway → Router → Runner → Components
+                                         ↓
+User ← Channel ← Gateway ← Response ← Runner
+```
+
+## Next Steps
+
+Dive deeper into each layer:
+
+- **[Components](/docs/architecture/components)** — How Wasm components work
+- **[Flows](/docs/architecture/flows)** — YGTC flow syntax and semantics
+- **[Packs](/docs/architecture/packs)** — Building and distributing bundles
+- **[Multi-tenancy](/docs/architecture/multi-tenancy)** — Tenant isolation model
+- **[Security](/docs/architecture/security)** — Security architecture

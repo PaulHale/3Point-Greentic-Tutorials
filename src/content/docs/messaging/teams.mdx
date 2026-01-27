@@ -1,0 +1,242 @@
+---
+title: "Microsoft Teams"
+description: "Integrate Greentic digital workers with Microsoft Teams"
+---
+
+# Microsoft Teams Integration
+
+Connect your Greentic flows to Microsoft Teams to build intelligent bots that respond to messages, handle commands, and send rich Adaptive Cards.
+
+## Overview
+
+The Teams integration supports:
+
+- Direct messages to bots
+- Channel mentions (@bot)
+- Adaptive Card responses
+- Proactive messaging
+- Authentication via Azure AD
+
+## Setup
+
+### 1. Create Azure Bot
+
+1. Go to the [Azure Portal](https://portal.azure.com)
+2. Create a new **Azure Bot** resource
+3. Note the **Microsoft App ID** and create a **Client Secret**
+
+### 2. Configure Greentic
+
+```bash
+# Set Teams credentials
+greentic-dev secrets set TEAMS_APP_ID --tenant your-tenant
+greentic-dev secrets set TEAMS_APP_SECRET --tenant your-tenant
+```
+
+### 3. Configure Messaging Endpoint
+
+In your Azure Bot settings, set the messaging endpoint:
+
+```
+https://your-greentic-instance.com/api/messaging/teams/webhook
+```
+
+### 4. Install Bot in Teams
+
+1. Create a Teams app manifest
+2. Upload to your organisation's app catalog
+3. Install the app in desired teams/channels
+
+## Message Handling
+
+### Incoming Messages
+
+When a user messages your bot, Greentic receives:
+
+```json
+{
+  "channel": "teams",
+  "message": {
+    "text": "Hello bot!",
+    "from": {
+      "id": "user-aad-id",
+      "name": "John Doe"
+    },
+    "conversation": {
+      "id": "conversation-id",
+      "type": "personal"
+    }
+  }
+}
+```
+
+### Flow Example
+
+```yaml
+id: teams-echo-bot
+type: messaging
+channel: teams
+start: respond
+
+nodes:
+  respond:
+    component.template:
+      config:
+        template: "Hi {{message.from.name}}! You said: {{message.text}}"
+    routing:
+      next: __end__
+```
+
+## Adaptive Cards
+
+Send rich, interactive cards:
+
+```yaml
+nodes:
+  send-card:
+    component.adaptive-card:
+      config:
+        card:
+          type: AdaptiveCard
+          version: "1.4"
+          body:
+            - type: TextBlock
+              text: "IT Support Request"
+              weight: bolder
+              size: large
+            - type: TextBlock
+              text: "How can we help you today?"
+            - type: Input.ChoiceSet
+              id: issue_type
+              choices:
+                - title: "Password Reset"
+                  value: "password"
+                - title: "Software Install"
+                  value: "software"
+                - title: "Hardware Issue"
+                  value: "hardware"
+          actions:
+            - type: Action.Submit
+              title: "Submit"
+```
+
+### Handling Card Submissions
+
+```yaml
+nodes:
+  handle-submit:
+    component.script:
+      config:
+        script: |
+          let choice = message.value.issue_type;
+          ctx.state.set("issue_type", choice);
+    routing:
+      conditions:
+        - when: "{{state.issue_type}} == 'password'"
+          next: password-flow
+        - when: "{{state.issue_type}} == 'software'"
+          next: software-flow
+      default: general-support
+```
+
+## Authentication
+
+### Single Sign-On (SSO)
+
+Enable SSO to authenticate users with their Microsoft account:
+
+```yaml
+nodes:
+  check-auth:
+    component.teams-auth:
+      config:
+        require_auth: true
+        scopes:
+          - User.Read
+          - Mail.Read
+    routing:
+      conditions:
+        - when: "{{auth.authenticated}}"
+          next: process
+      default: auth-prompt
+```
+
+### Graph API Access
+
+With authenticated users, you can access Microsoft Graph:
+
+```yaml
+nodes:
+  get-user-info:
+    component.http:
+      config:
+        url: "https://graph.microsoft.com/v1.0/me"
+        headers:
+          Authorization: "Bearer {{auth.access_token}}"
+```
+
+## Proactive Messaging
+
+Send messages without user initiation:
+
+```yaml
+# Triggered by an event, not a message
+id: proactive-notification
+type: events
+trigger: scheduled
+schedule: "0 9 * * MON"  # Every Monday at 9am
+start: notify
+
+nodes:
+  notify:
+    component.teams-proactive:
+      config:
+        conversation_id: "{{env.TEAM_CHANNEL_ID}}"
+        message: "Weekly standup reminder! Please update your status."
+```
+
+## Channel vs Personal
+
+Handle both channel and personal messages:
+
+```yaml
+nodes:
+  route-by-type:
+    component.script:
+      config:
+        script: |
+          ctx.state.set("is_channel", message.conversation.type == "channel");
+    routing:
+      conditions:
+        - when: "{{state.is_channel}}"
+          next: channel-handler
+      default: personal-handler
+```
+
+## Best Practices
+
+1. **Use Adaptive Cards** for rich interactions
+2. **Implement SSO** for seamless authentication
+3. **Handle rate limits** - Teams has API quotas
+4. **Test in multiple contexts** - personal, channel, group chat
+5. **Provide help commands** - `/help` or `@bot help`
+
+## Troubleshooting
+
+### Bot not responding
+
+- Verify the messaging endpoint is correct
+- Check Azure Bot health in the portal
+- Ensure the app is installed in Teams
+
+### Cards not rendering
+
+- Validate card JSON against the [Adaptive Cards schema](https://adaptivecards.io/designer/)
+- Check Teams version supports the card version
+- Test in the Adaptive Cards Designer
+
+## Related
+
+- [Messaging Overview](/docs/messaging/overview) - Multi-channel concepts
+- [Adaptive Cards Component](/docs/architecture/components) - Card rendering
+- [Slack](/docs/messaging/slack) - Similar integration for Slack

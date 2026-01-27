@@ -1,0 +1,135 @@
+---
+const currentYear = new Date().getFullYear();
+---
+
+<footer class="border-t border-border bg-muted/30">
+  <div class="container mx-auto max-w-7xl px-4 py-12 md:px-6">
+    <div class="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
+      <!-- Brand -->
+      <div class="space-y-4">
+        <a href="/" class="flex items-center gap-3">
+          <img
+            src="/greentic-logo.png"
+            alt="Greentic"
+            class="h-10 w-auto"
+          />
+          <span class="text-xl font-bold gradient-text">Greentic</span>
+        </a>
+        <p class="text-sm text-muted-foreground">
+          Digital workers that execute boring tasks — fast, secure, extensible.
+        </p>
+      </div>
+
+      <!-- Documentation -->
+      <div class="space-y-4">
+        <h3 class="font-semibold text-foreground">Documentation</h3>
+        <ul class="space-y-2 text-sm">
+          <li>
+            <a href="/docs/getting-started/introduction" class="text-muted-foreground transition-colors hover:text-foreground">
+              Getting Started
+            </a>
+          </li>
+          <li>
+            <a href="/docs/architecture/overview" class="text-muted-foreground transition-colors hover:text-foreground">
+              Architecture
+            </a>
+          </li>
+          <li>
+            <a href="/tutorials" class="text-muted-foreground transition-colors hover:text-foreground">
+              Tutorials
+            </a>
+          </li>
+          <li>
+            <a href="/docs/reference/cli" class="text-muted-foreground transition-colors hover:text-foreground">
+              API Reference
+            </a>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Resources -->
+      <div class="space-y-4">
+        <h3 class="font-semibold text-foreground">Resources</h3>
+        <ul class="space-y-2 text-sm">
+          <li>
+            <a
+              href="https://github.com/greentic-ai/greentic"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-muted-foreground transition-colors hover:text-foreground"
+            >
+              GitHub
+            </a>
+          </li>
+          <li>
+            <a
+              href="https://medium.com/@greentic-ai"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Blog
+            </a>
+          </li>
+          <li>
+            <a href="/platform" class="text-muted-foreground transition-colors hover:text-foreground">
+              Platform Overview
+            </a>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Company -->
+      <div class="space-y-4">
+        <h3 class="font-semibold text-foreground">Company</h3>
+        <ul class="space-y-2 text-sm">
+          <li>
+            <a
+              href="https://greentic.ai"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-muted-foreground transition-colors hover:text-foreground"
+            >
+              About
+            </a>
+          </li>
+          <li>
+            <a
+              href="https://x.com/greentic_ai"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Twitter / X
+            </a>
+          </li>
+          <li>
+            <a
+              href="https://www.linkedin.com/company/greentic-ai"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-muted-foreground transition-colors hover:text-foreground"
+            >
+              LinkedIn
+            </a>
+          </li>
+          <li>
+            <a href="mailto:info@greentic.ai" class="text-muted-foreground transition-colors hover:text-foreground">
+              Contact
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="mt-12 flex flex-col items-center justify-between gap-4 border-t border-border pt-8 md:flex-row">
+      <p class="text-sm text-muted-foreground">
+        &copy; {currentYear} Greentic.ai. Building the future of digital workers.
+      </p>
+      <div class="flex gap-4">
+        <a href="/privacy" class="text-sm text-muted-foreground transition-colors hover:text-foreground"> Privacy </a>
+        <a href="/terms" class="text-sm text-muted-foreground transition-colors hover:text-foreground"> Terms </a>
+      </div>
+    </div>
+  </div>
+</footer>

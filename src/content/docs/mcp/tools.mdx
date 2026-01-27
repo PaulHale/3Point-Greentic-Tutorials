@@ -1,0 +1,312 @@
+---
+title: "MCP Tools"
+description: "Using and creating Model Context Protocol tools in Greentic"
+---
+
+# MCP Tools
+
+Tools are the primary way for AI models to interact with the outside world through MCP. Greentic provides built-in tools and supports custom tool creation.
+
+## What are Tools?
+
+Tools are functions that AI models can call to:
+
+- Fetch data from APIs
+- Query databases
+- Execute code
+- Interact with external services
+- Perform calculations
+
+## Built-in Tools
+
+Greentic includes several built-in tools:
+
+### HTTP Tool
+
+Make HTTP requests:
+
+```yaml
+tools:
+  - name: http_request
+    description: "Make HTTP requests to external APIs"
+    parameters:
+      url:
+        type: string
+        description: "The URL to request"
+      method:
+        type: string
+        enum: ["GET", "POST", "PUT", "DELETE"]
+      body:
+        type: object
+        description: "Request body for POST/PUT"
+```
+
+### Database Tool
+
+Query databases:
+
+```yaml
+tools:
+  - name: query_database
+    description: "Execute SQL queries"
+    parameters:
+      query:
+        type: string
+        description: "SQL query to execute"
+      database:
+        type: string
+        description: "Database identifier"
+```
+
+### Vector Search Tool
+
+Search vector stores:
+
+```yaml
+tools:
+  - name: vector_search
+    description: "Search for similar documents"
+    parameters:
+      query:
+        type: string
+        description: "Search query"
+      top_k:
+        type: integer
+        description: "Number of results"
+        default: 5
+```
+
+## Using Tools in Flows
+
+### Define Available Tools
+
+```yaml
+id: tool-using-flow
+type: messaging
+start: process
+
+mcp:
+  tools:
+    - name: search_knowledge
+      component: component.vector-search
+      config:
+        store: knowledge-base
+    - name: send_email
+      component: component.email
+      config:
+        smtp_host: "{{secrets.smtp_host}}"
+
+nodes:
+  process:
+    component.llm-openai:
+      config:
+        model: gpt-4
+        tools:
+          - search_knowledge
+          - send_email
+        system: "You are a helpful assistant. Use tools when needed."
+```
+
+### Tool Execution Flow
+
+```
+User Query
+    ↓
+LLM receives query + tool definitions
+    ↓
+LLM decides to call tool
+    ↓
+MCP Executor runs tool
+    ↓
+Result returned to LLM
+    ↓
+LLM formulates response
+    ↓
+Response to user
+```
+
+## Creating Custom Tools
+
+### Tool Component
+
+Create a component that implements the tool interface:
+
+```rust
+// src/lib.rs
+use greentic_interfaces::tool::{ToolRequest, ToolResponse};
+
+#[export]
+fn execute(request: ToolRequest) -> ToolResponse {
+    let params = request.parameters;
+
+    // Implement tool logic
+    let city = params.get("city").unwrap();
+    let weather = fetch_weather(city);
+
+    ToolResponse {
+        success: true,
+        result: serde_json::json!({
+            "temperature": weather.temp,
+            "conditions": weather.conditions
+        }),
+        error: None
+    }
+}
+```
+
+### Tool Manifest
+
+Define the tool schema:
+
+```json
+{
+  "name": "get_weather",
+  "description": "Get current weather for a city",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "city": {
+        "type": "string",
+        "description": "City name"
+      },
+      "units": {
+        "type": "string",
+        "enum": ["celsius", "fahrenheit"],
+        "default": "celsius"
+      }
+    },
+    "required": ["city"]
+  }
+}
+```
+
+### Register Tool
+
+```yaml
+mcp:
+  tools:
+    - name: get_weather
+      component: component.weather
+      config:
+        api_key: "{{secrets.weather_api_key}}"
+```
+
+## Tool Patterns
+
+### Retrieval Augmented Generation (RAG)
+
+```yaml
+nodes:
+  rag-query:
+    component.llm-openai:
+      config:
+        model: gpt-4
+        tools:
+          - search_docs
+        system: |
+          Answer questions using the search_docs tool.
+          Always cite your sources.
+```
+
+### Multi-Step Tools
+
+Chain multiple tools:
+
+```yaml
+nodes:
+  research:
+    component.llm-openai:
+      config:
+        model: gpt-4
+        tools:
+          - web_search
+          - summarize_url
+          - save_note
+        system: |
+          Research the topic by:
+          1. Searching the web
+          2. Summarizing relevant pages
+          3. Saving key findings
+```
+
+### Confirmable Tools
+
+Require user confirmation for sensitive operations:
+
+```yaml
+tools:
+  - name: delete_account
+    component: component.account-manager
+    confirm: true
+    confirm_message: "Are you sure you want to delete your account?"
+```
+
+## Tool Security
+
+### Capability Restrictions
+
+```yaml
+tools:
+  - name: query_database
+    component: component.database
+    capabilities:
+      allowed_tables:
+        - users
+        - orders
+      max_rows: 100
+      read_only: true
+```
+
+### Rate Limiting
+
+```yaml
+tools:
+  - name: external_api
+    component: component.http
+    rate_limit:
+      requests_per_minute: 10
+      burst: 5
+```
+
+### Audit Logging
+
+All tool executions are logged:
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00Z",
+  "tool": "query_database",
+  "tenant": "acme-corp",
+  "parameters": {"query": "SELECT..."},
+  "duration_ms": 45,
+  "success": true
+}
+```
+
+## Best Practices
+
+1. **Write clear descriptions** - LLMs use these to decide when to call tools
+2. **Define parameter constraints** - Use enums and validation
+3. **Handle errors gracefully** - Return informative error messages
+4. **Keep tools focused** - One tool, one purpose
+5. **Test with various inputs** - LLMs can be creative with parameters
+
+## Troubleshooting
+
+### Tool not being called
+
+- Check the tool description is clear
+- Verify the system prompt mentions the tool
+- Test with explicit instructions
+
+### Tool returning errors
+
+- Validate parameter types
+- Check API credentials
+- Review error logs
+
+## Related
+
+- [MCP Overview](/docs/mcp/overview) - MCP concepts
+- [MCP Integration](/docs/mcp/integration) - Connecting tools to flows
+- [Components](/docs/architecture/components) - Building tool components

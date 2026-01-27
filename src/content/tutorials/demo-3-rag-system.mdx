@@ -1,0 +1,645 @@
+---
+title: "Demo 3: RAG Knowledge System"
+description: Create a full-stack RAG knowledge base with an Astro frontend, Greentic backend, and MCP tools for vector search.
+difficulty: advanced
+duration: "90 minutes"
+prerequisites:
+  - Completed Demo 1 and 2
+  - Node.js 20+
+  - Familiarity with React/Astro
+  - OpenAI API key
+order: 3
+---
+
+import CodeBlock from '@/components/tutorial/CodeBlock';
+import Terminal from '@/components/tutorial/Terminal';
+import Callout from '@/components/ui/Callout.astro';
+
+# RAG Knowledge System
+
+In this advanced tutorial, you'll build a complete Retrieval-Augmented Generation (RAG) system that includes:
+
+- **Astro frontend** with embedded WebChat widget
+- **Document ingestion** pipeline for your knowledge base
+- **Vector search** using MCP tools
+- **LLM-powered** question answering
+- **Full deployment** configuration
+
+## Architecture Overview
+
+import { RAGArchitectureDiagram } from '@/components/diagrams/RAGArchitectureDiagram';
+
+<RAGArchitectureDiagram client:visible className="my-6" />
+
+## Part 1: Set Up the Project
+
+Create your project structure:
+
+<Terminal
+  client:visible
+  lines={[
+    { type: 'command', content: 'mkdir rag-knowledge && cd rag-knowledge' },
+    { type: 'command', content: 'mkdir -p frontend backend/flows backend/docs' },
+  ]}
+/>
+
+Your project will look like this:
+
+```
+rag-knowledge/
+├── frontend/           # Astro website
+│   ├── src/
+│   └── package.json
+├── backend/
+│   ├── flows/          # Greentic flows
+│   ├── docs/           # Knowledge base documents
+│   └── .env
+└── docker-compose.yml
+```
+
+## Part 2: Create the Astro Frontend
+
+### Initialize Astro Project
+
+<Terminal
+  client:visible
+  lines={[
+    { type: 'command', content: 'cd frontend' },
+    { type: 'command', content: 'npm create astro@latest . -- --template minimal' },
+    { type: 'output', content: '✓ Project created!' },
+    { type: 'command', content: 'npm install @greentic/webchat react react-dom' },
+  ]}
+/>
+
+### Create the Landing Page
+
+<CodeBlock
+  client:visible
+  filename="frontend/src/pages/index.astro"
+  language="astro"
+  code={`---
+import WebChat from '../components/WebChat.astro';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Knowledge Base</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #1a1b26 0%, #16161e 100%);
+        color: #a9b1d6;
+      }
+
+      .hero {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 4rem 2rem;
+        text-align: center;
+      }
+
+      h1 {
+        font-size: 3rem;
+        background: linear-gradient(135deg, #2dd4bf, #06b6d4);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 1rem;
+      }
+
+      p {
+        font-size: 1.25rem;
+        opacity: 0.8;
+        max-width: 600px;
+        margin: 0 auto 2rem;
+      }
+
+      .features {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+        margin-top: 3rem;
+      }
+
+      .feature {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 1.5rem;
+        text-align: left;
+      }
+
+      .feature h3 {
+        color: #2dd4bf;
+        margin-bottom: 0.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="hero">
+      <h1>Knowledge Base</h1>
+      <p>
+        Ask questions about our documentation and get instant, accurate answers
+        powered by AI.
+      </p>
+
+      <div class="features">
+        <div class="feature">
+          <h3>Instant Answers</h3>
+          <p>Get responses in seconds, not hours of searching.</p>
+        </div>
+        <div class="feature">
+          <h3>Source Citations</h3>
+          <p>Every answer includes links to source documents.</p>
+        </div>
+        <div class="feature">
+          <h3>Always Learning</h3>
+          <p>Continuously updated with the latest documentation.</p>
+        </div>
+      </div>
+    </div>
+
+    <WebChat />
+  </body>
+</html>`}
+/>
+
+### Create the WebChat Component
+
+<CodeBlock
+  client:visible
+  filename="frontend/src/components/WebChat.astro"
+  language="astro"
+  code={`---
+// WebChat configuration
+const chatConfig = {
+  endpoint: import.meta.env.GREENTIC_ENDPOINT || 'http://localhost:8080',
+  tenant: import.meta.env.GREENTIC_TENANT || 'demo',
+  flow: 'rag-knowledge',
+  theme: {
+    primary: '#2dd4bf',
+    background: '#1a1b26',
+    text: '#a9b1d6',
+  },
+};
+---
+
+<div id="greentic-webchat" data-config={JSON.stringify(chatConfig)}></div>
+
+<script>
+  import { initWebChat } from '@greentic/webchat';
+
+  const container = document.getElementById('greentic-webchat');
+  const config = JSON.parse(container?.dataset.config || '{}');
+
+  initWebChat(container, {
+    ...config,
+    position: 'bottom-right',
+    greeting: "Hi! I'm your knowledge base assistant. Ask me anything about our documentation.",
+  });
+</script>
+
+<style>
+  #greentic-webchat {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+  }
+</style>`}
+/>
+
+## Part 3: Create the RAG Flow
+
+### The Main RAG Flow
+
+<CodeBlock
+  client:visible
+  filename="backend/flows/rag-knowledge.ygtc"
+  language="yaml"
+  code={`id: rag-knowledge
+type: messaging
+description: RAG-powered knowledge base assistant
+version: 1.0.0
+start: process-query
+
+nodes:
+  process-query:
+    component.template:
+      config:
+        template: "{{message.text}}"
+    state:
+      set:
+        query: "{{message.text}}"
+    routing:
+      next: embed-query
+
+  embed-query:
+    component.llm-openai:
+      config:
+        model: text-embedding-3-small
+        type: embedding
+        input: "{{state.query}}"
+    state:
+      set:
+        query_embedding: "{{output.embedding}}"
+    routing:
+      next: vector-search
+
+  vector-search:
+    component.mcp-tool:
+      config:
+        tool: vector-search
+        params:
+          embedding: "{{state.query_embedding}}"
+          top_k: 5
+          collection: knowledge-base
+    state:
+      set:
+        context_docs: "{{output.results}}"
+    routing:
+      next: generate-answer
+
+  generate-answer:
+    component.llm-openai:
+      config:
+        model: gpt-4o
+        temperature: 0.3
+        system: |
+          You are a helpful knowledge base assistant. Answer questions based
+          ONLY on the provided context. If the answer isn't in the context,
+          say "I don't have information about that in my knowledge base."
+
+          Always cite your sources by mentioning the document title.
+
+          Format your response with:
+          1. A clear, direct answer
+          2. Supporting details from the context
+          3. Source citations at the end
+        user: |
+          Question: {{state.query}}
+
+          Context from knowledge base:
+          {{#each state.context_docs}}
+          ---
+          Document: {{this.title}}
+          Content: {{this.content}}
+          ---
+          {{/each}}
+    routing:
+      next: format-response
+
+  format-response:
+    component.adaptive-card:
+      config:
+        card:
+          type: AdaptiveCard
+          version: "1.4"
+          body:
+            - type: TextBlock
+              text: "{{output.text}}"
+              wrap: true
+            - type: Container
+              style: emphasis
+              items:
+                - type: TextBlock
+                  text: "Sources:"
+                  weight: Bolder
+                  size: Small
+                - type: TextBlock
+                  text: "{{#each state.context_docs}}• {{this.title}}\\n{{/each}}"
+                  wrap: true
+                  size: Small
+    routing:
+      next: __end__`}
+/>
+
+### Configure MCP Tools
+
+Create the MCP configuration for vector search:
+
+<CodeBlock
+  client:visible
+  filename="backend/mcp-config.json"
+  language="json"
+  code={`{
+  "tools": {
+    "vector-search": {
+      "type": "http",
+      "endpoint": "http://vector-db:8000/search",
+      "method": "POST",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "embedding": {
+              "type": "array",
+              "items": { "type": "number" }
+            },
+            "top_k": {
+              "type": "integer",
+              "default": 5
+            },
+            "collection": {
+              "type": "string"
+            }
+          },
+          "required": ["embedding", "collection"]
+        }
+      }
+    },
+    "document-store": {
+      "type": "http",
+      "endpoint": "http://vector-db:8000/documents",
+      "method": "POST"
+    }
+  }
+}`}
+/>
+
+## Part 4: Document Ingestion Pipeline
+
+Create a flow to ingest documents into the knowledge base:
+
+<CodeBlock
+  client:visible
+  filename="backend/flows/ingest-document.ygtc"
+  language="yaml"
+  code={`id: ingest-document
+type: job
+description: Ingest a document into the knowledge base
+version: 1.0.0
+start: load-document
+
+nodes:
+  load-document:
+    component.file-reader:
+      config:
+        path: "{{input.file_path}}"
+    state:
+      set:
+        content: "{{output.content}}"
+        title: "{{input.title}}"
+    routing:
+      next: chunk-document
+
+  chunk-document:
+    component.text-splitter:
+      config:
+        chunk_size: 1000
+        overlap: 200
+        separator: "\\n\\n"
+        input: "{{state.content}}"
+    state:
+      set:
+        chunks: "{{output.chunks}}"
+    routing:
+      next: embed-chunks
+
+  embed-chunks:
+    component.llm-openai:
+      config:
+        model: text-embedding-3-small
+        type: embedding
+        input: "{{state.chunks}}"
+    state:
+      set:
+        embeddings: "{{output.embeddings}}"
+    routing:
+      next: store-vectors
+
+  store-vectors:
+    component.mcp-tool:
+      config:
+        tool: document-store
+        params:
+          documents:
+            - title: "{{state.title}}"
+              chunks: "{{state.chunks}}"
+              embeddings: "{{state.embeddings}}"
+          collection: knowledge-base
+    routing:
+      next: confirm
+
+  confirm:
+    component.template:
+      config:
+        template: |
+          Document "{{state.title}}" ingested successfully!
+          - Chunks created: {{state.chunks.length}}
+          - Collection: knowledge-base
+    routing:
+      next: __end__`}
+/>
+
+## Part 5: Docker Setup
+
+Create a Docker Compose file for local development:
+
+<CodeBlock
+  client:visible
+  filename="docker-compose.yml"
+  language="yaml"
+  code={`version: '3.8'
+
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - GREENTIC_ENDPOINT=http://backend:8080
+      - GREENTIC_TENANT=demo
+
+  backend:
+    image: greentic/runner:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend/flows:/flows
+      - ./backend/mcp-config.json:/config/mcp.json
+    environment:
+      - OPENAI_API_KEY=\${OPENAI_API_KEY}
+      - FLOW_DIR=/flows
+      - MCP_CONFIG=/config/mcp.json
+
+  vector-db:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+volumes:
+  qdrant_data:`}
+/>
+
+## Part 6: Add Sample Documents
+
+Create some markdown documents for your knowledge base:
+
+<CodeBlock
+  client:visible
+  filename="backend/docs/getting-started.md"
+  language="markdown"
+  code={`# Getting Started with Our Product
+
+## Introduction
+
+Welcome to our product! This guide will help you get up and running quickly.
+
+## Installation
+
+1. Download the installer from our website
+2. Run the installer with administrator privileges
+3. Follow the setup wizard
+
+## First Steps
+
+After installation, launch the application and:
+
+1. Create your account
+2. Verify your email
+3. Complete the onboarding tutorial
+
+## Need Help?
+
+Contact support at support@example.com or visit our help center.`}
+/>
+
+<CodeBlock
+  client:visible
+  filename="backend/docs/api-reference.md"
+  language="markdown"
+  code={`# API Reference
+
+## Authentication
+
+All API requests require a valid API key in the header:
+
+\`\`\`
+Authorization: Bearer your-api-key
+\`\`\`
+
+## Endpoints
+
+### GET /api/users
+
+Returns a list of users.
+
+**Parameters:**
+- \`page\` (optional): Page number
+- \`limit\` (optional): Results per page
+
+### POST /api/users
+
+Creates a new user.
+
+**Body:**
+\`\`\`json
+{
+  "name": "string",
+  "email": "string"
+}
+\`\`\`
+
+## Rate Limits
+
+- 100 requests per minute for free tier
+- 1000 requests per minute for paid tier`}
+/>
+
+## Part 7: Ingest Documents
+
+Run the ingestion flow for each document:
+
+<Terminal
+  client:visible
+  lines={[
+    { type: 'command', content: 'greentic-dev flow run -f backend/flows/ingest-document.ygtc --input \'{"file_path": "backend/docs/getting-started.md", "title": "Getting Started"}\'' },
+    { type: 'output', content: 'Loading document...' },
+    { type: 'output', content: 'Chunking: 3 chunks created' },
+    { type: 'output', content: 'Embedding chunks...' },
+    { type: 'output', content: 'Storing vectors...' },
+    { type: 'success', content: 'Document "Getting Started" ingested successfully!' },
+    { type: 'command', content: 'greentic-dev flow run -f backend/flows/ingest-document.ygtc --input \'{"file_path": "backend/docs/api-reference.md", "title": "API Reference"}\'' },
+    { type: 'success', content: 'Document "API Reference" ingested successfully!' },
+  ]}
+/>
+
+## Part 8: Test the System
+
+Start all services:
+
+<Terminal
+  client:visible
+  lines={[
+    { type: 'command', content: 'docker-compose up -d' },
+    { type: 'output', content: 'Creating network "rag-knowledge_default"' },
+    { type: 'output', content: 'Creating rag-knowledge_vector-db_1 ... done' },
+    { type: 'output', content: 'Creating rag-knowledge_backend_1 ... done' },
+    { type: 'output', content: 'Creating rag-knowledge_frontend_1 ... done' },
+  ]}
+/>
+
+Open http://localhost:3000 and try asking questions:
+
+- "How do I install the product?"
+- "What are the API rate limits?"
+- "How do I authenticate API requests?"
+
+<Callout type="success" title="Working RAG System">
+  You now have a fully functional RAG knowledge base! The system retrieves relevant documents and generates accurate, cited answers.
+</Callout>
+
+## Part 9: Production Deployment
+
+For production, consider:
+
+### Security
+
+<CodeBlock
+  client:visible
+  filename="backend/.env.production"
+  language="bash"
+  code={`# Use environment variables, not hardcoded keys
+OPENAI_API_KEY=\${OPENAI_API_KEY}
+
+# Enable authentication
+AUTH_ENABLED=true
+AUTH_PROVIDER=oauth
+
+# TLS configuration
+TLS_ENABLED=true
+TLS_CERT_PATH=/certs/cert.pem
+TLS_KEY_PATH=/certs/key.pem`}
+/>
+
+### Scaling
+
+- Use managed vector database (Pinecone, Weaviate Cloud)
+- Deploy multiple runner instances behind a load balancer
+- Cache embeddings for common queries
+- Monitor with OpenTelemetry
+
+## What You Learned
+
+Congratulations! You've built a production-ready RAG system:
+
+- ✅ Astro frontend with WebChat integration
+- ✅ RAG flow with vector search
+- ✅ Document ingestion pipeline
+- ✅ MCP tool configuration
+- ✅ Docker deployment setup
+- ✅ Production considerations
+
+## Next Steps
+
+- **[Messaging Channels](/docs/messaging/overview)** — Add Teams, Slack support
+- **[MCP Deep Dive](/docs/mcp/overview)** — Create custom tools
+- **[Security Guide](/docs/architecture/security)** — Production hardening
+- **[Telemetry](/docs/reference/telemetry)** — Monitoring and debugging

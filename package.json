@@ -1,0 +1,48 @@
+{
+  "name": "greentic-docs",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Greentic Documentation Website - Interactive docs and tutorials for the digital worker platform",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "lint": "eslint . --ext .ts,.tsx,.astro",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "astro": "^5.1.0",
+    "@astrojs/react": "^4.1.0",
+    "@astrojs/mdx": "^4.0.0",
+    "@astrojs/tailwind": "^6.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@xyflow/react": "^12.3.0",
+    "framer-motion": "^11.15.0",
+    "@react-three/fiber": "^8.17.0",
+    "@react-three/drei": "^9.117.0",
+    "three": "^0.170.0",
+    "shiki": "^1.24.0",
+    "@codesandbox/sandpack-react": "^2.19.0",
+    "tailwindcss": "^3.4.0",
+    "@tailwindcss/typography": "^0.5.15",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "lucide-react": "^0.469.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.6.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/three": "^0.170.0",
+    "typescript": "^5.7.0",
+    "prettier": "^3.4.0",
+    "prettier-plugin-astro": "^0.14.0",
+    "@astrojs/check": "^0.9.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

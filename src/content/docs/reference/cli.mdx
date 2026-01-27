@@ -1,0 +1,425 @@
+---
+title: "CLI Reference"
+description: "Complete reference for the greentic-dev command-line interface"
+---
+
+# CLI Reference
+
+The `greentic-dev` CLI is your primary tool for developing, testing, and deploying Greentic flows and components.
+
+## Installation
+
+```bash
+# Using cargo
+cargo install greentic-dev
+
+# Or download binary from releases
+curl -fsSL https://get.greentic.ai | sh
+```
+
+## Global Options
+
+```bash
+greentic-dev [OPTIONS] <COMMAND>
+
+Options:
+  -v, --verbose      Enable verbose output
+  -q, --quiet        Suppress non-error output
+  --config <PATH>    Path to config file [default: ~/.greentic/config.toml]
+  --tenant <ID>      Tenant ID for multi-tenant operations
+  -h, --help         Print help
+  -V, --version      Print version
+```
+
+## Commands
+
+### flow
+
+Manage YGTC flow files.
+
+#### flow validate
+
+Validate a flow file:
+
+```bash
+greentic-dev flow validate [OPTIONS] -f <FILE>
+
+Options:
+  -f, --file <FILE>     Flow file to validate
+  --json                Output as JSON
+  --strict              Enable strict validation
+  --schema <URL>        Custom schema URL
+
+Examples:
+  greentic-dev flow validate -f my-flow.ygtc
+  greentic-dev flow validate -f my-flow.ygtc --json
+```
+
+#### flow lint
+
+Lint a flow file for best practices:
+
+```bash
+greentic-dev flow lint [OPTIONS] -f <FILE>
+
+Options:
+  -f, --file <FILE>     Flow file to lint
+  --fix                 Auto-fix issues where possible
+  --rules <RULES>       Comma-separated rules to enable
+
+Examples:
+  greentic-dev flow lint -f my-flow.ygtc
+  greentic-dev flow lint -f my-flow.ygtc --fix
+```
+
+#### flow run
+
+Run a flow locally:
+
+```bash
+greentic-dev flow run [OPTIONS] -f <FILE>
+
+Options:
+  -f, --file <FILE>     Flow file to run
+  --mocks <MODE>        Mock mode: on, off, record [default: on]
+  --input <JSON>        Initial input message as JSON
+  --interactive         Enable interactive mode
+  --port <PORT>         WebChat port [default: 3000]
+
+Examples:
+  greentic-dev flow run -f support.ygtc --interactive
+  greentic-dev flow run -f echo.ygtc --input '{"text": "hello"}'
+```
+
+### component
+
+Manage Wasm components.
+
+#### component new
+
+Scaffold a new component:
+
+```bash
+greentic-dev component new [OPTIONS] <NAME>
+
+Options:
+  --org <ORG>           Organisation namespace [default: local]
+  --template <TPL>      Template: basic, llm, http, script
+  --path <PATH>         Output directory [default: .]
+
+Examples:
+  greentic-dev component new my-component --org ai.greentic
+  greentic-dev component new llm-classifier --template llm
+```
+
+#### component build
+
+Build a component:
+
+```bash
+greentic-dev component build [OPTIONS]
+
+Options:
+  --path <PATH>         Component directory [default: .]
+  --release             Build in release mode
+  --target <TARGET>     Target [default: wasm32-wasip2]
+
+Examples:
+  greentic-dev component build --release
+```
+
+#### component validate
+
+Validate a component:
+
+```bash
+greentic-dev component validate [OPTIONS]
+
+Options:
+  --path <PATH>         Component directory [default: .]
+  --manifest <FILE>     Manifest file [default: component.manifest.json]
+
+Examples:
+  greentic-dev component validate --path ./my-component
+```
+
+#### component test
+
+Test a component:
+
+```bash
+greentic-dev component test [OPTIONS]
+
+Options:
+  --path <PATH>         Component directory [default: .]
+  --filter <PATTERN>    Test filter pattern
+
+Examples:
+  greentic-dev component test
+  greentic-dev component test --filter "test_handle_*"
+```
+
+### pack
+
+Manage Greentic packs.
+
+#### pack build
+
+Build a pack from flows and components:
+
+```bash
+greentic-dev pack build [OPTIONS]
+
+Options:
+  -f, --flow <FILES>    Flow files to include (can repeat)
+  -c, --component <DIR> Component directories (can repeat)
+  -o, --output <FILE>   Output pack file [default: dist/pack.gtpack]
+  --version <VER>       Pack version [default: 0.1.0]
+  --sign                Sign the pack
+  --key <FILE>          Signing key file
+
+Examples:
+  greentic-dev pack build -f flows/*.ygtc -o my-pack.gtpack
+  greentic-dev pack build -f main.ygtc -c ./components --sign
+```
+
+#### pack run
+
+Run a pack locally:
+
+```bash
+greentic-dev pack run [OPTIONS] -p <PACK>
+
+Options:
+  -p, --pack <FILE>     Pack file to run
+  --mocks <MODE>        Mock mode: on, off [default: on]
+  --port <PORT>         WebChat port [default: 3000]
+
+Examples:
+  greentic-dev pack run -p my-pack.gtpack
+  greentic-dev pack run -p my-pack.gtpack --mocks off
+```
+
+#### pack sign
+
+Sign a pack:
+
+```bash
+greentic-dev pack sign [OPTIONS] -p <PACK>
+
+Options:
+  -p, --pack <FILE>     Pack file to sign
+  --key <FILE>          Private key file
+  --cert <FILE>         Certificate file
+  -o, --output <FILE>   Output file [default: overwrite input]
+
+Examples:
+  greentic-dev pack sign -p my-pack.gtpack --key key.pem --cert cert.pem
+```
+
+#### pack verify
+
+Verify pack signature:
+
+```bash
+greentic-dev pack verify [OPTIONS] -p <PACK>
+
+Options:
+  -p, --pack <FILE>           Pack file to verify
+  --trusted-certs <DIR>       Directory of trusted certificates
+
+Examples:
+  greentic-dev pack verify -p my-pack.gtpack
+```
+
+#### pack inspect
+
+Inspect pack contents:
+
+```bash
+greentic-dev pack inspect [OPTIONS] -p <PACK>
+
+Options:
+  -p, --pack <FILE>     Pack file to inspect
+  --json                Output as JSON
+  --extract <DIR>       Extract contents to directory
+
+Examples:
+  greentic-dev pack inspect -p my-pack.gtpack
+  greentic-dev pack inspect -p my-pack.gtpack --extract ./unpacked
+```
+
+### secrets
+
+Manage secrets.
+
+#### secrets set
+
+Set a secret:
+
+```bash
+greentic-dev secrets set <NAME> [OPTIONS]
+
+Options:
+  --tenant <ID>         Tenant ID
+  --value <VALUE>       Secret value (prompts if not provided)
+  --file <FILE>         Read value from file
+
+Examples:
+  greentic-dev secrets set API_KEY --tenant acme-corp
+  greentic-dev secrets set CERT --file ./cert.pem
+```
+
+#### secrets list
+
+List secrets:
+
+```bash
+greentic-dev secrets list [OPTIONS]
+
+Options:
+  --tenant <ID>         Tenant ID
+
+Examples:
+  greentic-dev secrets list --tenant acme-corp
+```
+
+#### secrets delete
+
+Delete a secret:
+
+```bash
+greentic-dev secrets delete <NAME> [OPTIONS]
+
+Options:
+  --tenant <ID>         Tenant ID
+  --force               Skip confirmation
+
+Examples:
+  greentic-dev secrets delete API_KEY --tenant acme-corp
+```
+
+### deploy
+
+Deploy packs.
+
+#### deploy plan
+
+Generate deployment plan:
+
+```bash
+greentic-dev deploy plan [OPTIONS] -p <PACK>
+
+Options:
+  -p, --pack <FILE>     Pack to deploy
+  --target <TARGET>     Target environment
+  --output <FILE>       Output plan file
+
+Examples:
+  greentic-dev deploy plan -p my-pack.gtpack --target production
+```
+
+#### deploy apply
+
+Apply deployment:
+
+```bash
+greentic-dev deploy apply [OPTIONS] <PLAN>
+
+Options:
+  --auto-approve        Skip confirmation
+  --dry-run             Show what would happen
+
+Examples:
+  greentic-dev deploy apply deploy-plan.json
+  greentic-dev deploy apply deploy-plan.json --dry-run
+```
+
+### config
+
+Manage configuration.
+
+#### config init
+
+Initialise configuration:
+
+```bash
+greentic-dev config init [OPTIONS]
+
+Options:
+  --force               Overwrite existing config
+
+Examples:
+  greentic-dev config init
+```
+
+#### config get
+
+Get configuration value:
+
+```bash
+greentic-dev config get <KEY>
+
+Examples:
+  greentic-dev config get default_tenant
+```
+
+#### config set
+
+Set configuration value:
+
+```bash
+greentic-dev config set <KEY> <VALUE>
+
+Examples:
+  greentic-dev config set default_tenant acme-corp
+```
+
+## Configuration File
+
+Location: `~/.greentic/config.toml`
+
+```toml
+[defaults]
+tenant = "acme-corp"
+output_format = "text"  # or "json"
+
+[api]
+url = "https://api.greentic.ai"
+timeout_seconds = 30
+
+[build]
+target = "wasm32-wasip2"
+release = true
+
+[signing]
+key_file = "~/.greentic/keys/signing.key"
+cert_file = "~/.greentic/keys/signing.crt"
+```
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `GREENTIC_CONFIG` | Config file path |
+| `GREENTIC_TENANT` | Default tenant ID |
+| `GREENTIC_API_URL` | API base URL |
+| `GREENTIC_API_KEY` | API authentication key |
+| `RUST_LOG` | Log level (debug, info, warn, error) |
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | General error |
+| 2 | Invalid arguments |
+| 3 | Validation error |
+| 4 | Build error |
+| 5 | Runtime error |
+
+## Related
+
+- [Quickstart](/docs/getting-started/quickstart) - Getting started guide
+- [YGTC Schema](/docs/reference/ygtc-schema) - Flow file specification
+- [Component Manifest](/docs/reference/component-manifest) - Component specification

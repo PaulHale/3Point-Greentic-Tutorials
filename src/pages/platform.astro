@@ -1,0 +1,310 @@
+---
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import Card from '@/components/ui/Card.astro';
+import FiveLayersCanvas from '@/components/diagrams/FiveLayersCanvas';
+import DataFlowAnimation from '@/components/diagrams/DataFlowAnimation';
+import ComponentAnatomy from '@/components/diagrams/ComponentAnatomy';
+---
+
+<MarketingLayout
+  title="Platform Overview"
+  description="Explore the Greentic platform architecture - a modular, multi-tenant automation system built on WebAssembly."
+>
+  <!-- Hero Section -->
+  <section class="py-20 bg-gradient-to-b from-background to-muted/30">
+    <div class="container mx-auto max-w-5xl px-4 md:px-6 text-center">
+      <h1 class="text-4xl md:text-6xl font-bold text-foreground mb-6">Platform Architecture</h1>
+      <p class="text-xl text-muted-foreground max-w-3xl mx-auto">
+        A five-layer architecture designed for secure, scalable, and observable digital workers. Click on any layer to
+        explore its components.
+      </p>
+    </div>
+  </section>
+
+  <!-- Five Layers Architecture Diagram -->
+  <section class="py-16">
+    <div class="container mx-auto max-w-6xl px-4 md:px-6">
+      <FiveLayersCanvas client:visible className="w-full" />
+    </div>
+  </section>
+
+  <!-- Data Flow Animation -->
+  <section class="py-16 bg-muted/30">
+    <div class="container mx-auto max-w-5xl px-4 md:px-6">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl md:text-4xl font-bold text-foreground mb-4">Request Flow</h2>
+        <p class="text-lg text-muted-foreground">
+          Watch how a message flows through the system from user to response.
+        </p>
+      </div>
+      <DataFlowAnimation client:visible />
+    </div>
+  </section>
+
+  <!-- Component Anatomy -->
+  <section class="py-16">
+    <div class="container mx-auto max-w-5xl px-4 md:px-6">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl md:text-4xl font-bold text-foreground mb-4">Inside a Component</h2>
+        <p class="text-lg text-muted-foreground">
+          Components are self-describing WebAssembly modules. Explore their anatomy.
+        </p>
+      </div>
+      <ComponentAnatomy client:visible />
+    </div>
+  </section>
+
+  <!-- Key Principles -->
+  <section class="py-16 bg-muted/30">
+    <div class="container mx-auto max-w-6xl px-4 md:px-6">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl md:text-4xl font-bold text-foreground mb-4">Design Principles</h2>
+        <p class="text-lg text-muted-foreground">
+          Core principles that guide every architectural decision.
+        </p>
+      </div>
+
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <Card class="p-6">
+          <div class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-primary">
+              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-foreground mb-2">Contract Before Code</h3>
+          <p class="text-sm text-muted-foreground">
+            Every interface is defined in WIT or JSON Schema before implementation. Clear boundaries, versioned APIs,
+            and type-safe bindings.
+          </p>
+        </Card>
+
+        <Card class="p-6">
+          <div class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-primary">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-foreground mb-2">Multi-Tenant First</h3>
+          <p class="text-sm text-muted-foreground">
+            TenantCtx is propagated through every API call. Complete isolation, per-tenant configuration, and audit
+            trails built in.
+          </p>
+        </Card>
+
+        <Card class="p-6">
+          <div class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-primary">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-foreground mb-2">Manifest = Truth</h3>
+          <p class="text-sm text-muted-foreground">
+            Components and packs are self-describing through manifests. No out-of-band configuration needed for runtime.
+          </p>
+        </Card>
+
+        <Card class="p-6">
+          <div class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-primary">
+              <rect x="2" y="6" width="20" height="12" rx="2" />
+              <path d="M6 12h4" />
+              <path d="M14 12h4" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-foreground mb-2">Runtime Agnostic</h3>
+          <p class="text-sm text-muted-foreground">
+            Same contracts work in-process, Wasm sandbox, remote execution, or sidecar deployment. Flexibility without
+            code changes.
+          </p>
+        </Card>
+
+        <Card class="p-6">
+          <div class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-primary">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-foreground mb-2">Security Built-in</h3>
+          <p class="text-sm text-muted-foreground">
+            mTLS between services, signed packs, capability controls, and audit logging. Security is not an afterthought.
+          </p>
+        </Card>
+
+        <Card class="p-6">
+          <div class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-primary">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-foreground mb-2">Observable by Default</h3>
+          <p class="text-sm text-muted-foreground">
+            OpenTelemetry traces, metrics, and logs for every flow execution. Correlation IDs propagated throughout.
+          </p>
+        </Card>
+      </div>
+    </div>
+  </section>
+
+  <!-- Layer Details -->
+  <section class="py-16">
+    <div class="container mx-auto max-w-6xl px-4 md:px-6">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl md:text-4xl font-bold text-foreground mb-4">Layer Details</h2>
+        <p class="text-lg text-muted-foreground">
+          Deep dive into each architectural layer.
+        </p>
+      </div>
+
+      <div class="space-y-8">
+        <!-- Developer Experience -->
+        <div class="p-6 rounded-xl border-2 border-primary/30 bg-gradient-to-r from-primary/5 to-transparent">
+          <div class="flex items-start gap-4">
+            <div class="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-primary">
+                <polyline points="16 18 22 12 16 6" />
+                <polyline points="8 6 2 12 8 18" />
+              </svg>
+            </div>
+            <div>
+              <h3 class="text-xl font-bold text-foreground mb-2">Developer Experience</h3>
+              <p class="text-muted-foreground mb-4">
+                Tools for building, testing, and debugging digital workers. Everything you need from idea to deployment.
+              </p>
+              <div class="flex flex-wrap gap-2">
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">greentic-dev CLI</span>
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">GUI Editor</span>
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">WebChat Testing</span>
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">IDE Plugins</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Supply Chain -->
+        <div class="p-6 rounded-xl border border-border bg-card">
+          <div class="flex items-start gap-4">
+            <div class="w-12 h-12 rounded-lg bg-[hsl(186,70%,50%,0.2)] flex items-center justify-center shrink-0">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-[hsl(186,70%,50%)]">
+                <path d="m7.5 4.27 9 5.15" />
+                <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+              </svg>
+            </div>
+            <div>
+              <h3 class="text-xl font-bold text-foreground mb-2">Supply Chain</h3>
+              <p class="text-muted-foreground mb-4">
+                Complete lifecycle from building components to distributing packs. Secure, versioned, and auditable.
+              </p>
+              <div class="flex flex-wrap gap-2">
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">Pack Builder</span>
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">Component Store</span>
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">Distributor</span>
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">Signing</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Runtime -->
+        <div class="p-6 rounded-xl border border-border bg-card">
+          <div class="flex items-start gap-4">
+            <div class="w-12 h-12 rounded-lg bg-[hsl(220,70%,50%,0.2)] flex items-center justify-center shrink-0">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-[hsl(220,70%,50%)]">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+            </div>
+            <div>
+              <h3 class="text-xl font-bold text-foreground mb-2">Runtime</h3>
+              <p class="text-muted-foreground mb-4">
+                Executes flows in secure WebAssembly sandboxes. Manages sessions, state, and MCP tool calls.
+              </p>
+              <div class="flex flex-wrap gap-2">
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">Flow Runner</span>
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">Session Manager</span>
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">State Store</span>
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">MCP Executor</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Integration -->
+        <div class="p-6 rounded-xl border border-border bg-card">
+          <div class="flex items-start gap-4">
+            <div class="w-12 h-12 rounded-lg bg-[hsl(280,70%,50%,0.2)] flex items-center justify-center shrink-0">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-[hsl(280,70%,50%)]">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            </div>
+            <div>
+              <h3 class="text-xl font-bold text-foreground mb-2">Integration</h3>
+              <p class="text-muted-foreground mb-4">
+                Connects digital workers to the outside world. Messaging, events, and OAuth authentication.
+              </p>
+              <div class="flex flex-wrap gap-2">
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">Teams</span>
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">Slack</span>
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">WhatsApp</span>
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">Webhooks</span>
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">OAuth</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Foundation -->
+        <div class="p-6 rounded-xl border border-border bg-card">
+          <div class="flex items-start gap-4">
+            <div class="w-12 h-12 rounded-lg bg-[hsl(340,70%,50%,0.2)] flex items-center justify-center shrink-0">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-6 h-6 text-[hsl(340,70%,50%)]">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M3 9h18" />
+                <path d="M9 21V9" />
+              </svg>
+            </div>
+            <div>
+              <h3 class="text-xl font-bold text-foreground mb-2">Foundation</h3>
+              <p class="text-muted-foreground mb-4">
+                Shared primitives used by all layers. Types, interfaces, and telemetry that ensure consistency.
+              </p>
+              <div class="flex flex-wrap gap-2">
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">greentic-types</span>
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">greentic-interfaces</span>
+                <span class="px-3 py-1 text-sm rounded-full bg-muted text-muted-foreground">greentic-telemetry</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="py-16 bg-muted/30">
+    <div class="container mx-auto max-w-4xl px-4 md:px-6 text-center">
+      <h2 class="text-3xl font-bold text-foreground mb-4">Ready to Build?</h2>
+      <p class="text-lg text-muted-foreground mb-8">
+        Start with our quickstart guide or dive into the architecture documentation.
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a
+          href="/docs/getting-started/quickstart"
+          class="px-6 py-3 rounded-lg bg-gradient-to-r from-primary to-primary-glow text-primary-foreground font-medium hover:opacity-90 transition-opacity"
+        >
+          Get Started
+        </a>
+        <a
+          href="/docs/architecture/overview"
+          class="px-6 py-3 rounded-lg border border-border bg-card text-foreground font-medium hover:bg-muted transition-colors"
+        >
+          Read Architecture Docs
+        </a>
+      </div>
+    </div>
+  </section>
+</MarketingLayout>

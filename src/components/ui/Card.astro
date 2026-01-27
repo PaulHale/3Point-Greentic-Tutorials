@@ -1,0 +1,26 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+
+interface Props extends HTMLAttributes<'div'> {
+  variant?: 'default' | 'gradient' | 'glow';
+  hover?: boolean;
+}
+
+const { variant = 'default', hover = false, class: className, ...props } = Astro.props;
+
+const baseClasses = 'rounded-xl bg-card border border-border p-6 transition-all duration-300';
+
+const variantClasses = {
+  default: '',
+  gradient: 'bg-gradient-to-br from-primary/5 to-primary-glow/5 border-primary/20',
+  glow: 'hover:shadow-glow',
+};
+
+const hoverClasses = hover ? 'hover:border-primary/30 hover:shadow-soft hover:-translate-y-1' : '';
+
+const classes = [baseClasses, variantClasses[variant], hoverClasses, className].filter(Boolean).join(' ');
+---
+
+<div class={classes} {...props}>
+  <slot />
+</div>

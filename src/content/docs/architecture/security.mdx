@@ -1,0 +1,249 @@
+---
+title: "Security"
+description: "Security model, sandboxing, and best practices for Greentic"
+---
+
+# Security
+
+Security is built into every layer of Greentic. From WebAssembly sandboxing to signed packs, the platform is designed to protect your data and infrastructure.
+
+## Defence in Depth
+
+Greentic implements multiple security layers:
+
+import { SecurityLayersDiagram } from '@/components/diagrams/SecurityLayersDiagram';
+
+<SecurityLayersDiagram client:load className="my-8" />
+
+## WebAssembly Sandboxing
+
+All components run in isolated WebAssembly sandboxes:
+
+### Capability-Based Security
+
+Components must declare capabilities in their manifest:
+
+```json
+{
+  "capabilities": {
+    "network": {
+      "allowed_hosts": ["api.openai.com", "*.internal.corp"]
+    },
+    "filesystem": {
+      "read": ["/data/models"],
+      "write": []
+    },
+    "environment": {
+      "allowed_vars": ["API_KEY", "MODEL_NAME"]
+    }
+  }
+}
+```
+
+### Resource Limits
+
+```yaml
+execution:
+  max_memory_mb: 256
+  max_cpu_time_ms: 30000
+  max_instructions: 1000000000
+```
+
+### No Ambient Authority
+
+Components cannot:
+- Access the filesystem (unless explicitly granted)
+- Make network calls (unless to allowed hosts)
+- Read environment variables (unless listed)
+- Execute system commands
+- Access other tenants' data
+
+## Signed Packs
+
+All production packs must be signed:
+
+```bash
+# Sign a pack
+greentic-dev pack sign \
+  --pack my-pack.gtpack \
+  --key signing-key.pem \
+  --cert signing-cert.pem
+
+# Verify a pack
+greentic-dev pack verify \
+  --pack my-pack.gtpack \
+  --trusted-certs /etc/greentic/trusted/
+```
+
+### Signature Chain
+
+```
+Developer Key
+    ↓ signs
+Component Hash
+    ↓ included in
+Pack Manifest
+    ↓ signed by
+Organisation Key
+    ↓ verified by
+Distributor
+    ↓ verified by
+Runner
+```
+
+## Secrets Management
+
+Secrets are never stored in plain text:
+
+```yaml
+# In flow definition - reference only
+nodes:
+  call-api:
+    component.http:
+      config:
+        headers:
+          Authorization: "Bearer {{secrets.api_key}}"
+```
+
+```bash
+# Set secrets via CLI
+greentic-dev secrets set api_key --tenant acme-corp
+Enter secret value: ****
+```
+
+### Secret Storage
+
+- Encrypted at rest with AES-256-GCM
+- Per-tenant encryption keys
+- Key rotation support
+- Audit logging of access
+
+## Authentication
+
+### Messaging Channels
+
+Each channel has its own auth mechanism:
+
+| Channel | Authentication |
+|---------|---------------|
+| Teams | Azure AD / Bot Framework |
+| Slack | OAuth 2.0 / Signing Secret |
+| WhatsApp | Meta Business verification |
+| WebChat | JWT tokens |
+| Telegram | Bot token validation |
+| Webex | OAuth 2.0 |
+
+### API Authentication
+
+```bash
+# API key authentication
+curl -H "X-API-Key: $API_KEY" \
+  https://api.greentic.ai/v1/flows
+
+# OAuth bearer token
+curl -H "Authorization: Bearer $TOKEN" \
+  https://api.greentic.ai/v1/flows
+```
+
+## Authorisation
+
+### Role-Based Access Control
+
+```yaml
+roles:
+  flow-developer:
+    permissions:
+      - flows.read
+      - flows.write
+      - flows.execute
+      - components.read
+
+  operator:
+    permissions:
+      - flows.read
+      - flows.execute
+      - logs.read
+      - metrics.read
+
+  admin:
+    permissions:
+      - "*"
+```
+
+### Scoped Tokens
+
+```json
+{
+  "sub": "user-123",
+  "tenant": "acme-corp",
+  "scopes": ["flows:read", "flows:execute"],
+  "exp": 1705320000
+}
+```
+
+## Network Security
+
+### mTLS Between Services
+
+All internal communication uses mutual TLS:
+
+```yaml
+tls:
+  cert_file: /etc/greentic/certs/service.crt
+  key_file: /etc/greentic/certs/service.key
+  ca_file: /etc/greentic/certs/ca.crt
+  verify_client: true
+```
+
+### Rate Limiting
+
+```yaml
+rate_limits:
+  default:
+    requests_per_minute: 60
+    burst: 10
+
+  by_tenant:
+    enterprise:
+      requests_per_minute: 600
+      burst: 100
+```
+
+## Audit Logging
+
+All security-relevant events are logged:
+
+```json
+{
+  "event_type": "auth.login",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "tenant_id": "acme-corp",
+  "user_id": "user-123",
+  "ip_address": "192.168.1.100",
+  "user_agent": "greentic-cli/1.0",
+  "outcome": "success",
+  "correlation_id": "req-abc-123"
+}
+```
+
+## Security Best Practices
+
+1. **Use signed packs** in production
+2. **Minimise component capabilities** - request only what's needed
+3. **Rotate secrets regularly** - use the secrets rotation API
+4. **Enable audit logging** - review logs periodically
+5. **Use scoped tokens** - avoid admin tokens for automation
+6. **Keep components updated** - patch security vulnerabilities
+7. **Test with security scanning** - run SAST/DAST tools
+
+## Vulnerability Reporting
+
+Report security vulnerabilities to: security@greentic.ai
+
+We follow responsible disclosure and will acknowledge reports within 24 hours.
+
+## Related
+
+- [Multi-tenancy](/docs/architecture/multi-tenancy) - Tenant isolation
+- [Components](/docs/architecture/components) - Component capabilities
+- [Packs](/docs/architecture/packs) - Pack signing

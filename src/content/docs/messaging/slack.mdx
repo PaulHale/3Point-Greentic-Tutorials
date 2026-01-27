@@ -1,0 +1,281 @@
+---
+title: "Slack"
+description: "Integrate Greentic digital workers with Slack"
+---
+
+# Slack Integration
+
+Connect your Greentic flows to Slack to build intelligent bots that respond to messages, slash commands, and interactive components.
+
+## Overview
+
+The Slack integration supports:
+
+- Direct messages
+- Channel mentions (@bot)
+- Slash commands
+- Interactive messages (buttons, menus)
+- Block Kit UI
+- Event subscriptions
+
+## Setup
+
+### 1. Create Slack App
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps)
+2. Click **Create New App** → **From scratch**
+3. Name your app and select a workspace
+
+### 2. Configure Bot Permissions
+
+Under **OAuth & Permissions**, add these scopes:
+
+```
+Bot Token Scopes:
+- chat:write
+- im:history
+- im:read
+- im:write
+- users:read
+```
+
+### 3. Enable Events
+
+Under **Event Subscriptions**:
+
+1. Enable events
+2. Set Request URL: `https://your-greentic-instance.com/api/messaging/slack/events`
+3. Subscribe to bot events:
+   - `message.im`
+   - `app_mention`
+
+### 4. Configure Greentic
+
+```bash
+# Set Slack credentials
+greentic-dev secrets set SLACK_BOT_TOKEN --tenant your-tenant
+greentic-dev secrets set SLACK_SIGNING_SECRET --tenant your-tenant
+```
+
+## Message Handling
+
+### Incoming Messages
+
+When a user messages your bot:
+
+```json
+{
+  "channel": "slack",
+  "message": {
+    "text": "Hello bot!",
+    "from": {
+      "id": "U123ABC",
+      "name": "john.doe"
+    },
+    "channel": {
+      "id": "C123ABC",
+      "type": "im"
+    }
+  }
+}
+```
+
+### Flow Example
+
+```yaml
+id: slack-support-bot
+type: messaging
+channel: slack
+start: greet
+
+nodes:
+  greet:
+    component.template:
+      config:
+        template: "Hi <@{{message.from.id}}>! How can I help you?"
+    routing:
+      next: __end__
+```
+
+## Block Kit Messages
+
+Send rich messages with Block Kit:
+
+```yaml
+nodes:
+  send-blocks:
+    component.slack-blocks:
+      config:
+        blocks:
+          - type: header
+            text:
+              type: plain_text
+              text: "🎫 Support Ticket Created"
+          - type: section
+            text:
+              type: mrkdwn
+              text: "Your ticket *#12345* has been created."
+            accessory:
+              type: button
+              text:
+                type: plain_text
+                text: "View Ticket"
+              action_id: view_ticket
+              value: "12345"
+          - type: divider
+          - type: context
+            elements:
+              - type: mrkdwn
+                text: "Priority: *High* | Assigned: Support Team"
+```
+
+## Slash Commands
+
+Handle custom slash commands:
+
+### Configure in Slack
+
+1. Go to **Slash Commands**
+2. Create new command: `/support`
+3. Request URL: `https://your-greentic-instance.com/api/messaging/slack/commands`
+
+### Handle in Flow
+
+```yaml
+id: support-command
+type: messaging
+channel: slack
+trigger: slash_command
+command: /support
+start: parse-command
+
+nodes:
+  parse-command:
+    component.script:
+      config:
+        script: |
+          let args = message.text.split(" ");
+          ctx.state.set("action", args[0] || "help");
+    routing:
+      conditions:
+        - when: "{{state.action}} == 'new'"
+          next: create-ticket
+        - when: "{{state.action}} == 'status'"
+          next: check-status
+      default: show-help
+```
+
+## Interactive Components
+
+Handle button clicks and menu selections:
+
+```yaml
+nodes:
+  handle-interaction:
+    component.script:
+      config:
+        script: |
+          let action = message.actions[0];
+          ctx.state.set("action_id", action.action_id);
+          ctx.state.set("value", action.value);
+    routing:
+      conditions:
+        - when: "{{state.action_id}} == 'view_ticket'"
+          next: show-ticket
+        - when: "{{state.action_id}} == 'close_ticket'"
+          next: close-ticket
+```
+
+## Modal Dialogs
+
+Open interactive modals:
+
+```yaml
+nodes:
+  open-modal:
+    component.slack-modal:
+      config:
+        trigger_id: "{{message.trigger_id}}"
+        view:
+          type: modal
+          title:
+            type: plain_text
+            text: "Create Ticket"
+          submit:
+            type: plain_text
+            text: "Submit"
+          blocks:
+            - type: input
+              block_id: title_block
+              label:
+                type: plain_text
+                text: "Title"
+              element:
+                type: plain_text_input
+                action_id: title_input
+            - type: input
+              block_id: desc_block
+              label:
+                type: plain_text
+                text: "Description"
+              element:
+                type: plain_text_input
+                action_id: desc_input
+                multiline: true
+```
+
+## Home Tab
+
+Configure a custom Home tab:
+
+```yaml
+id: slack-home-tab
+type: events
+trigger: app_home_opened
+start: render-home
+
+nodes:
+  render-home:
+    component.slack-home:
+      config:
+        user_id: "{{event.user}}"
+        view:
+          type: home
+          blocks:
+            - type: header
+              text:
+                type: plain_text
+                text: "Welcome to Support Bot!"
+            - type: section
+              text:
+                type: mrkdwn
+                text: "Use `/support new` to create a ticket"
+```
+
+## Best Practices
+
+1. **Use Block Kit** for rich formatting
+2. **Acknowledge quickly** - Slack expects responses within 3 seconds
+3. **Use ephemeral messages** for user-specific responses
+4. **Implement unfurl** for link previews
+5. **Handle rate limits** - respect Slack's API quotas
+
+## Troubleshooting
+
+### Bot not responding
+
+- Verify the signing secret matches
+- Check event subscriptions are enabled
+- Ensure bot has required permissions
+
+### Interactions failing
+
+- Verify interaction URL is configured
+- Check the trigger_id hasn't expired (3 seconds)
+- Validate Block Kit JSON
+
+## Related
+
+- [Messaging Overview](/docs/messaging/overview) - Multi-channel concepts
+- [Microsoft Teams](/docs/messaging/teams) - Similar integration for Teams
+- [WebChat](/docs/messaging/webchat) - Web-based chat widget

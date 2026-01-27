@@ -1,0 +1,410 @@
+---
+title: Flows
+description: YGTC flow definitions - the declarative orchestration language for Greentic digital workers.
+order: 3
+---
+
+# Flows
+
+Flows are declarative YAML files (`.ygtc`) that define how components are wired together to create digital workers. They are the orchestration layer of Greentic.
+
+## Flow Structure
+
+Every flow has this basic structure:
+
+```yaml
+# Required metadata
+id: my-flow
+type: messaging
+description: Description of what this flow does
+start: first-node
+
+# Node definitions
+nodes:
+  first-node:
+    component.name:
+      config:
+        setting: value
+    routing:
+      next: second-node
+
+  second-node:
+    component.other:
+      config: {}
+    routing:
+      next: __end__
+```
+
+## Flow Types
+
+Flows can be one of several types:
+
+| Type | Trigger | Use Case |
+|------|---------|----------|
+| `messaging` | Incoming message | Chat bots, support agents |
+| `events` | Webhook/event | Triggered automation |
+| `http` | HTTP request | API-like flows |
+| `job` | Scheduled | Background tasks |
+| `component-config` | Component call | Sub-flows |
+
+### Messaging Flows
+
+Most common type. Triggered by messages from channels:
+
+```yaml
+id: support-bot
+type: messaging
+description: IT support assistant
+start: greet
+```
+
+### Event Flows
+
+Triggered by external events:
+
+```yaml
+id: new-user-onboarding
+type: events
+description: Welcome new users
+triggers:
+  - event: user.created
+    filter:
+      source: auth-service
+start: send-welcome
+```
+
+### HTTP Flows
+
+Act like API endpoints:
+
+```yaml
+id: status-check
+type: http
+description: Health check endpoint
+method: GET
+path: /health
+start: check
+```
+
+## Nodes
+
+Nodes are the steps in a flow. Each node invokes a component with configuration.
+
+### Basic Node
+
+```yaml
+nodes:
+  process:
+    component.llm-openai:
+      config:
+        model: gpt-4o
+        temperature: 0.7
+    routing:
+      next: respond
+```
+
+### Node with Multiple Outputs
+
+```yaml
+nodes:
+  classify:
+    component.classifier:
+      config:
+        categories:
+          - billing
+          - technical
+          - other
+    routing:
+      branches:
+        - condition: "{{output.category}} == 'billing'"
+          next: billing-flow
+        - condition: "{{output.category}} == 'technical'"
+          next: tech-flow
+        - condition: default
+          next: general-flow
+```
+
+### Node with State
+
+```yaml
+nodes:
+  remember-name:
+    component.template:
+      config:
+        template: "Hello {{message.text}}"
+    state:
+      set:
+        user_name: "{{message.text}}"
+    routing:
+      next: greet
+
+  greet:
+    component.template:
+      config:
+        template: "Nice to meet you, {{state.user_name}}!"
+```
+
+## Routing
+
+Routing determines which node executes next.
+
+### Simple Routing
+
+```yaml
+routing:
+  next: next-node
+```
+
+### Conditional Routing
+
+```yaml
+routing:
+  branches:
+    - condition: "{{output.score}} > 0.8"
+      next: high-confidence
+    - condition: "{{output.score}} > 0.5"
+      next: medium-confidence
+    - condition: default
+      next: low-confidence
+```
+
+### Loop Back
+
+```yaml
+routing:
+  next: same-node  # Loops back to this node
+```
+
+### End Flow
+
+```yaml
+routing:
+  next: __end__  # Terminates the flow
+```
+
+## State Management
+
+Flows can read and write state that persists across nodes.
+
+### Setting State
+
+```yaml
+nodes:
+  collect:
+    component.qa-process:
+      config:
+        questions:
+          - What's your name?
+          - What's your email?
+    state:
+      set:
+        name: "{{output.answers[0]}}"
+        email: "{{output.answers[1]}}"
+```
+
+### Reading State
+
+```yaml
+nodes:
+  summarise:
+    component.template:
+      config:
+        template: |
+          Summary for {{state.name}}:
+          Email: {{state.email}}
+```
+
+### Clearing State
+
+```yaml
+state:
+  clear:
+    - temporary_data
+```
+
+## Templating
+
+Flows use a Handlebars-like templating syntax:
+
+### Variables
+
+```yaml
+# Access message
+"{{message.text}}"
+"{{message.channel}}"
+
+# Access state
+"{{state.user_name}}"
+
+# Access output from previous component
+"{{output.result}}"
+
+# Access config
+"{{config.setting}}"
+```
+
+### Conditions
+
+```yaml
+condition: "{{output.score}} > 0.5"
+condition: "{{state.attempts}} < 3"
+condition: "{{message.channel}} == 'teams'"
+```
+
+### Built-in Helpers
+
+```yaml
+# String manipulation
+"{{uppercase state.name}}"
+"{{lowercase message.text}}"
+
+# Date/time
+"{{now}}"
+"{{format_date output.timestamp}}"
+
+# JSON
+"{{json output}}"
+```
+
+## QA Processing
+
+The `qa.process` component collects structured information:
+
+```yaml
+nodes:
+  collect-info:
+    component.qa-process:
+      config:
+        questions:
+          - id: issue
+            text: What seems to be the problem?
+            required: true
+          - id: urgency
+            text: How urgent is this?
+            type: choice
+            options:
+              - Low
+              - Medium
+              - High
+    routing:
+      next: process
+```
+
+## Full Example
+
+Here's a complete IT support flow:
+
+```yaml
+id: it-support
+type: messaging
+description: IT support assistant with LLM classification
+version: 1.0.0
+start: collect-info
+
+nodes:
+  collect-info:
+    component.qa-process:
+      config:
+        questions:
+          - id: issue
+            text: Please describe your IT issue
+            required: true
+    routing:
+      next: classify
+
+  classify:
+    component.llm-openai:
+      config:
+        model: gpt-4o
+        system: |
+          Classify this IT support request into one of:
+          - password: Password reset or login issues
+          - hardware: Physical equipment problems
+          - software: Application issues
+          - network: Connectivity problems
+          - other: Anything else
+
+          Respond with just the category name.
+    routing:
+      branches:
+        - condition: "{{output.text}} == 'password'"
+          next: password-reset
+        - condition: "{{output.text}} == 'hardware'"
+          next: hardware-ticket
+        - condition: default
+          next: general-support
+
+  password-reset:
+    component.adaptive-card:
+      config:
+        template: password-reset-card
+    routing:
+      next: __end__
+
+  hardware-ticket:
+    component.template:
+      config:
+        template: |
+          I'll create a hardware support ticket for you.
+          A technician will contact you within 24 hours.
+    routing:
+      next: __end__
+
+  general-support:
+    component.llm-openai:
+      config:
+        model: gpt-4o
+        system: You are a helpful IT support assistant
+    routing:
+      next: __end__
+```
+
+## Validation
+
+Always validate flows before deployment:
+
+```bash
+greentic-dev flow validate -f my-flow.ygtc --json
+```
+
+This checks:
+
+- Valid YAML syntax
+- Required fields present
+- Node references exist
+- Routing conditions valid
+- Component references valid
+
+## Best Practices
+
+### Name Nodes Descriptively
+
+```yaml
+# Good
+collect-issue:
+classify-request:
+send-response:
+
+# Bad
+node1:
+step2:
+x:
+```
+
+### Keep Flows Focused
+
+One flow, one purpose. Compose flows rather than creating monolithic ones.
+
+### Handle All Branches
+
+Always have a `default` condition to catch unexpected cases.
+
+### Version Your Flows
+
+Include version metadata for tracking changes.
+
+## Next Steps
+
+- **[Packs](/docs/architecture/packs)** — Bundling flows for distribution
+- **[YGTC Schema Reference](/docs/reference/ygtc-schema)** — Full schema documentation
+- **[Tutorial: IT Support Bot](/tutorials/demo-2-it-support)** — Step-by-step flow building

@@ -1,0 +1,144 @@
+---
+title: Introduction to Greentic
+description: Learn what Greentic is and how it enables digital workers that execute tasks fast, secure, and extensible.
+order: 1
+---
+
+# Introduction to Greentic
+
+Greentic is a **modular, multi-tenant automation platform** built around WebAssembly components. It enables you to build digital workers that can execute complex tasks autonomously across multiple channels and integrations.
+
+## What is a Digital Worker?
+
+A digital worker is an intelligent automation that can:
+
+- **Receive messages** from various channels (Teams, Slack, WhatsApp, etc.)
+- **Process information** using LLMs, scripts, and business logic
+- **Execute actions** through MCP tools and external APIs
+- **Respond appropriately** with text, rich cards, or triggered workflows
+
+Unlike traditional chatbots or automation scripts, digital workers in Greentic are:
+
+- **Secure** — WebAssembly sandboxing ensures components can't access what they shouldn't
+- **Portable** — The same worker runs on any cloud, edge, or on-premises
+- **Observable** — Full OpenTelemetry integration for traces, metrics, and logs
+- **Composable** — Build complex behaviours from simple, reusable components
+
+## Core Concepts
+
+Greentic is built around three fundamental concepts:
+
+### Components
+
+Components are self-describing WebAssembly modules that execute specific logic. Each component:
+
+- Runs in a secure sandbox with strict capability controls
+- Declares its configuration schema for validation
+- Exposes a standard `handle(request) -> response` interface
+- Can be versioned, signed, and distributed
+
+Examples include LLM integrations, Adaptive Card builders, script engines, and more.
+
+```yaml
+# Example component reference in a flow
+component.llm-openai:
+  config:
+    model: gpt-4o
+    temperature: 0.7
+```
+
+### Flows
+
+Flows are declarative YAML files (`.ygtc`) that wire components together. They define:
+
+- **Nodes** — Named steps that invoke components
+- **Routing** — Conditions that determine the next node
+- **State** — Data passed between nodes
+- **Triggers** — How the flow is activated
+
+```yaml
+# Example flow structure
+id: support-flow
+type: messaging
+start: collect-info
+
+nodes:
+  collect-info:
+    component.qa-process:
+      config:
+        questions:
+          - What's your issue?
+    routing:
+      next: classify
+
+  classify:
+    component.llm-openai:
+      config:
+        system: Classify this IT support request
+    routing:
+      next: respond
+```
+
+### Packs
+
+Packs are signed, versioned bundles that contain:
+
+- One or more flows
+- Required component manifests
+- Configuration schemas
+- Deployment metadata
+
+Packs are the unit of distribution through the Greentic supply chain, ensuring that workers are auditable, reproducible, and secure.
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    DEVELOPER TOOLS                          │
+│  CLI • GUI Editor • IDE Plugins • WebChat Testing           │
+├─────────────────────────────────────────────────────────────┤
+│                    SUPPLY CHAIN                             │
+│  Build → Store → Distribute → Deploy                        │
+├─────────────────────────────────────────────────────────────┤
+│                    RUNTIME                                  │
+│  Runner • Session • State • MCP Execution                   │
+├─────────────────────────────────────────────────────────────┤
+│                    INTEGRATION                              │
+│  6 Channels • Events • OAuth • External APIs                │
+├─────────────────────────────────────────────────────────────┤
+│                    FOUNDATION                               │
+│  Types • Interfaces • Telemetry                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Why Greentic?
+
+### For Developers
+
+- **Familiar tools** — Write components in Rust, configure flows in YAML
+- **Fast iteration** — Local development with hot reload
+- **Type safety** — JSON Schema validation at every layer
+- **Extensibility** — Add new components and channels easily
+
+### For Operations
+
+- **Multi-tenant** — Complete isolation between tenants
+- **Observable** — Full tracing and metrics out of the box
+- **Scalable** — Horizontal scaling with stateless runners
+- **Portable** — Deploy anywhere: cloud, edge, or on-premises
+
+### For Security
+
+- **Sandboxed** — WebAssembly isolation for all component code
+- **Signed** — Cryptographic signatures on all packs
+- **Auditable** — Complete execution history and lineage
+- **Compliant** — Built for enterprise security requirements
+
+## Next Steps
+
+Ready to get started? Here's what to do next:
+
+1. **[Install Greentic](/docs/getting-started/installation)** — Get the CLI and runtime set up
+2. **[Quickstart](/docs/getting-started/quickstart)** — Build your first digital worker
+3. **[Architecture Deep Dive](/docs/architecture/overview)** — Understand the platform in detail
+4. **[Tutorials](/tutorials)** — Follow step-by-step guides for common use cases

@@ -1,0 +1,297 @@
+---
+title: "WhatsApp"
+description: "Integrate Greentic digital workers with WhatsApp Business"
+---
+
+# WhatsApp Integration
+
+Connect your Greentic flows to WhatsApp Business to reach customers on the world's most popular messaging platform.
+
+## Overview
+
+The WhatsApp integration supports:
+
+- Text messages
+- Media messages (images, documents, audio, video)
+- Interactive messages (buttons, lists)
+- Message templates
+- Location sharing
+- Contact sharing
+
+## Prerequisites
+
+- WhatsApp Business Account
+- Meta Business verification
+- Access to Meta Business Suite
+
+## Setup
+
+### 1. Create Meta App
+
+1. Go to [developers.facebook.com](https://developers.facebook.com)
+2. Create a new app with **Business** type
+3. Add the **WhatsApp** product
+
+### 2. Configure Webhook
+
+In the WhatsApp settings:
+
+1. Set webhook URL: `https://your-greentic-instance.com/api/messaging/whatsapp/webhook`
+2. Set verify token (you choose this)
+3. Subscribe to: `messages`, `messaging_postbacks`
+
+### 3. Configure Greentic
+
+```bash
+# Set WhatsApp credentials
+greentic-dev secrets set WHATSAPP_TOKEN --tenant your-tenant
+greentic-dev secrets set WHATSAPP_VERIFY_TOKEN --tenant your-tenant
+greentic-dev secrets set WHATSAPP_PHONE_ID --tenant your-tenant
+```
+
+## Message Handling
+
+### Incoming Messages
+
+When a user messages your business:
+
+```json
+{
+  "channel": "whatsapp",
+  "message": {
+    "text": "Hello!",
+    "from": {
+      "id": "447123456789",
+      "name": "John"
+    },
+    "type": "text"
+  }
+}
+```
+
+### Flow Example
+
+```yaml
+id: whatsapp-support
+type: messaging
+channel: whatsapp
+start: greet
+
+nodes:
+  greet:
+    component.template:
+      config:
+        template: "Hello {{message.from.name}}! Welcome to our support. How can we help?"
+    routing:
+      next: __end__
+```
+
+## Interactive Messages
+
+### Buttons
+
+Send messages with quick reply buttons:
+
+```yaml
+nodes:
+  ask-category:
+    component.whatsapp-interactive:
+      config:
+        type: button
+        body:
+          text: "What type of support do you need?"
+        action:
+          buttons:
+            - type: reply
+              reply:
+                id: "sales"
+                title: "Sales"
+            - type: reply
+              reply:
+                id: "support"
+                title: "Support"
+            - type: reply
+              reply:
+                id: "billing"
+                title: "Billing"
+```
+
+### Lists
+
+Send selection lists:
+
+```yaml
+nodes:
+  show-products:
+    component.whatsapp-interactive:
+      config:
+        type: list
+        body:
+          text: "Browse our products:"
+        action:
+          button: "View Products"
+          sections:
+            - title: "Electronics"
+              rows:
+                - id: "phone"
+                  title: "Smartphones"
+                  description: "Latest models"
+                - id: "laptop"
+                  title: "Laptops"
+                  description: "Work & gaming"
+            - title: "Accessories"
+              rows:
+                - id: "case"
+                  title: "Phone Cases"
+                - id: "charger"
+                  title: "Chargers"
+```
+
+## Message Templates
+
+For initiating conversations (outside 24-hour window):
+
+### Create Template
+
+Templates must be approved by Meta:
+
+```yaml
+nodes:
+  send-template:
+    component.whatsapp-template:
+      config:
+        name: "order_confirmation"
+        language:
+          code: "en"
+        components:
+          - type: body
+            parameters:
+              - type: text
+                text: "{{state.order_id}}"
+              - type: text
+                text: "{{state.delivery_date}}"
+```
+
+### Template Example
+
+```
+Template Name: order_confirmation
+Body: Your order {{1}} has been confirmed!
+      Expected delivery: {{2}}
+```
+
+## Media Messages
+
+### Sending Images
+
+```yaml
+nodes:
+  send-image:
+    component.whatsapp-media:
+      config:
+        type: image
+        url: "https://example.com/product.jpg"
+        caption: "Here's the product you requested!"
+```
+
+### Receiving Media
+
+```yaml
+nodes:
+  handle-media:
+    component.script:
+      config:
+        script: |
+          if message.type == "image" {
+            let media_id = message.image.id;
+            let caption = message.image.caption;
+            ctx.state.set("media_id", media_id);
+          }
+    routing:
+      conditions:
+        - when: "{{message.type}} == 'image'"
+          next: process-image
+      default: handle-text
+```
+
+## Location Handling
+
+### Request Location
+
+```yaml
+nodes:
+  request-location:
+    component.whatsapp-interactive:
+      config:
+        type: location_request_message
+        body:
+          text: "Please share your location for delivery"
+```
+
+### Process Location
+
+```yaml
+nodes:
+  handle-location:
+    component.script:
+      config:
+        script: |
+          let lat = message.location.latitude;
+          let lon = message.location.longitude;
+          ctx.state.set("delivery_location", {
+            lat: lat,
+            lon: lon
+          });
+```
+
+## 24-Hour Window
+
+WhatsApp has a 24-hour messaging window:
+
+- **Within 24 hours**: Can send any message type
+- **After 24 hours**: Must use approved templates
+
+```yaml
+nodes:
+  check-window:
+    component.script:
+      config:
+        script: |
+          let last_msg = ctx.session.last_user_message;
+          let now = ctx.timestamp;
+          let hours_elapsed = (now - last_msg) / 3600;
+          ctx.state.set("in_window", hours_elapsed < 24);
+    routing:
+      conditions:
+        - when: "{{state.in_window}}"
+          next: send-message
+      default: send-template
+```
+
+## Best Practices
+
+1. **Use templates** for outbound marketing
+2. **Respond quickly** - users expect fast responses
+3. **Provide opt-out** - respect user preferences
+4. **Handle media** - support image uploads for support
+5. **Use interactive messages** - better UX than free text
+
+## Troubleshooting
+
+### Messages not delivered
+
+- Verify phone number is registered
+- Check API rate limits
+- Ensure templates are approved
+
+### Webhook not receiving
+
+- Verify webhook URL is HTTPS
+- Check verify token matches
+- Confirm subscriptions are active
+
+## Related
+
+- [Messaging Overview](/docs/messaging/overview) - Multi-channel concepts
+- [Microsoft Teams](/docs/messaging/teams) - Teams integration
+- [Slack](/docs/messaging/slack) - Slack integration

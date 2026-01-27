@@ -1,0 +1,496 @@
+---
+title: "Demo 2: IT Support Assistant"
+description: Build an intelligent IT support assistant using LLM integration, Adaptive Cards, and conditional routing.
+difficulty: intermediate
+duration: "45 minutes"
+prerequisites:
+  - Completed Demo 1 (Hello World)
+  - OpenAI API key
+  - Understanding of YAML
+order: 2
+---
+
+import CodeBlock from '@/components/tutorial/CodeBlock';
+import Terminal from '@/components/tutorial/Terminal';
+import Callout from '@/components/ui/Callout.astro';
+
+# IT Support Assistant
+
+In this tutorial, you'll build a realistic IT support assistant that can:
+
+- Collect issue details through structured Q&A
+- Classify requests using an LLM
+- Route to different handlers based on classification
+- Display rich Adaptive Cards for actions
+- Maintain conversation state
+
+## Architecture Overview
+
+Here's what we're building:
+
+import { ITSupportFlowDiagram } from '@/components/diagrams/ITSupportFlowDiagram';
+
+<ITSupportFlowDiagram client:visible className="my-6" />
+
+## Set Up Your Project
+
+Create a new project directory:
+
+<Terminal
+  client:visible
+  lines={[
+    { type: 'command', content: 'mkdir it-support && cd it-support' },
+  ]}
+/>
+
+## Configure Secrets
+
+The LLM component needs an API key. Create a `.env` file:
+
+<CodeBlock
+  client:visible
+  filename=".env"
+  language="bash"
+  code={`OPENAI_API_KEY=sk-your-api-key-here`}
+/>
+
+<Callout type="warning" title="Keep Secrets Safe">
+  Never commit `.env` files to version control. Add `.env` to your `.gitignore`.
+</Callout>
+
+## Create the Flow
+
+Create `support.ygtc` with the basic structure:
+
+<CodeBlock
+  client:visible
+  filename="support.ygtc"
+  language="yaml"
+  code={`id: it-support
+type: messaging
+description: IT Support Assistant with LLM classification
+version: 1.0.0
+start: greet
+
+nodes:
+  greet:
+    component.template:
+      config:
+        template: |
+          Welcome to IT Support!
+          I can help with password resets, hardware issues,
+          software problems, and more.
+
+          Please describe your issue.
+    routing:
+      next: collect-info`}
+/>
+
+## Add Issue Collection
+
+The Q&A component collects structured information:
+
+<CodeBlock
+  client:visible
+  filename="support.ygtc (continued)"
+  language="yaml"
+  highlightLines={[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]}
+  code={`  collect-info:
+    component.qa-process:
+      config:
+        questions:
+          - id: issue_description
+            text: "Please describe your issue in detail:"
+            required: true
+          - id: urgency
+            text: "How urgent is this?"
+            type: choice
+            options:
+              - Low - Can wait a few days
+              - Medium - Need help today
+              - High - Blocking my work
+              - Critical - System down
+    state:
+      set:
+        issue: "{{output.answers.issue_description}}"
+        urgency: "{{output.answers.urgency}}"
+    routing:
+      next: classify`}
+/>
+
+The Q&A component:
+
+- Presents questions one at a time
+- Validates required fields
+- Supports different input types (text, choice, etc.)
+- Outputs structured data in `output.answers`
+
+## Add LLM Classification
+
+Now for the intelligent part - using an LLM to classify the request:
+
+<CodeBlock
+  client:visible
+  filename="support.ygtc (continued)"
+  language="yaml"
+  highlightLines={[4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]}
+  code={`  classify:
+    component.llm-openai:
+      config:
+        model: gpt-4o
+        temperature: 0
+        system: |
+          You are an IT support classifier. Analyse the user's issue and
+          classify it into exactly one of these categories:
+
+          - password: Password reset, login issues, MFA problems
+          - hardware: Physical equipment, monitors, keyboards, mice
+          - software: Application errors, installation, updates
+          - network: WiFi, VPN, connectivity issues
+          - other: Anything that doesn't fit above
+
+          Respond with ONLY the category name, nothing else.
+        user: "Issue: {{state.issue}}"
+    state:
+      set:
+        category: "{{output.text}}"
+    routing:
+      branches:
+        - condition: "{{output.text}} == 'password'"
+          next: password-handler
+        - condition: "{{output.text}} == 'hardware'"
+          next: hardware-handler
+        - condition: "{{output.text}} == 'software'"
+          next: software-handler
+        - condition: "{{output.text}} == 'network'"
+          next: network-handler
+        - condition: default
+          next: general-handler`}
+/>
+
+Key points:
+
+- **`temperature: 0`** — Makes the LLM deterministic for classification
+- **System prompt** — Gives clear instructions and categories
+- **Conditional routing** — Branches based on LLM output
+
+## Add Category Handlers
+
+### Password Handler with Adaptive Card
+
+<CodeBlock
+  client:visible
+  filename="support.ygtc (continued)"
+  language="yaml"
+  code={`  password-handler:
+    component.adaptive-card:
+      config:
+        card:
+          type: AdaptiveCard
+          version: "1.4"
+          body:
+            - type: TextBlock
+              text: "Password Reset Request"
+              weight: Bolder
+              size: Large
+            - type: TextBlock
+              text: "I can help you reset your password. Click the button below to start the secure reset process."
+              wrap: true
+            - type: TextBlock
+              text: "Issue: {{state.issue}}"
+              wrap: true
+              color: Attention
+          actions:
+            - type: Action.OpenUrl
+              title: "Reset Password"
+              url: "https://password.company.com/reset"
+            - type: Action.Submit
+              title: "I need more help"
+              data:
+                action: escalate
+    routing:
+      next: __end__`}
+/>
+
+### Hardware Handler
+
+<CodeBlock
+  client:visible
+  filename="support.ygtc (continued)"
+  language="yaml"
+  code={`  hardware-handler:
+    component.template:
+      config:
+        template: |
+          I'll create a hardware support ticket for you.
+
+          **Issue:** {{state.issue}}
+          **Urgency:** {{state.urgency}}
+          **Ticket ID:** HW-{{timestamp}}
+
+          A technician will contact you within:
+          {{#if (eq state.urgency "Critical - System down")}}
+          - 1 hour (Critical priority)
+          {{else if (eq state.urgency "High - Blocking my work")}}
+          - 4 hours (High priority)
+          {{else}}
+          - 24 hours (Standard priority)
+          {{/if}}
+    routing:
+      next: __end__`}
+/>
+
+### Software Handler with LLM Assistance
+
+<CodeBlock
+  client:visible
+  filename="support.ygtc (continued)"
+  language="yaml"
+  code={`  software-handler:
+    component.llm-openai:
+      config:
+        model: gpt-4o
+        temperature: 0.7
+        system: |
+          You are a helpful IT support agent specialising in software issues.
+          Provide clear, step-by-step troubleshooting guidance.
+          Keep responses concise but helpful.
+          If you can't resolve the issue, explain how to escalate.
+        user: |
+          User issue: {{state.issue}}
+
+          Please provide troubleshooting steps.
+    routing:
+      branches:
+        - condition: "{{output.text}}.includes('escalate')"
+          next: escalate
+        - condition: default
+          next: ask-resolved`}
+/>
+
+### Network and General Handlers
+
+<CodeBlock
+  client:visible
+  filename="support.ygtc (continued)"
+  language="yaml"
+  code={`  network-handler:
+    component.template:
+      config:
+        template: |
+          Let me check some common network issues:
+
+          1. **VPN Issues:** Try disconnecting and reconnecting
+          2. **WiFi Problems:** Forget the network and rejoin
+          3. **Slow Internet:** Run a speed test at speedtest.net
+
+          If these don't help, I'll connect you with the network team.
+    routing:
+      next: ask-resolved
+
+  general-handler:
+    component.llm-openai:
+      config:
+        model: gpt-4o
+        system: You are a helpful IT support assistant. Be friendly and thorough.
+        user: "Please help with: {{state.issue}}"
+    routing:
+      next: ask-resolved`}
+/>
+
+## Add Follow-up Flow
+
+Ask if the issue was resolved and handle accordingly:
+
+<CodeBlock
+  client:visible
+  filename="support.ygtc (continued)"
+  language="yaml"
+  code={`  ask-resolved:
+    component.qa-process:
+      config:
+        questions:
+          - id: resolved
+            text: "Did this resolve your issue?"
+            type: choice
+            options:
+              - Yes, thank you!
+              - No, I need more help
+    routing:
+      branches:
+        - condition: "{{output.answers.resolved}}.startsWith('Yes')"
+          next: close-resolved
+        - condition: default
+          next: escalate
+
+  close-resolved:
+    component.template:
+      config:
+        template: |
+          Great! I'm glad I could help.
+
+          If you have any other issues, just start a new conversation.
+          Have a great day!
+    routing:
+      next: __end__
+
+  escalate:
+    component.template:
+      config:
+        template: |
+          I'll escalate this to a human agent.
+
+          **Ticket Created:** ESC-{{timestamp}}
+          **Category:** {{state.category}}
+          **Issue:** {{state.issue}}
+          **Urgency:** {{state.urgency}}
+
+          A support specialist will contact you within 30 minutes.
+    routing:
+      next: __end__`}
+/>
+
+## Complete Flow
+
+Here's the full flow file for reference:
+
+<CodeBlock
+  client:visible
+  filename="support.ygtc (complete)"
+  language="yaml"
+  showLineNumbers={false}
+  code={`id: it-support
+type: messaging
+description: IT Support Assistant with LLM classification
+version: 1.0.0
+start: greet
+
+nodes:
+  greet:
+    component.template:
+      config:
+        template: |
+          Welcome to IT Support!
+          I can help with password resets, hardware issues,
+          software problems, and more.
+
+          Please describe your issue.
+    routing:
+      next: collect-info
+
+  collect-info:
+    component.qa-process:
+      config:
+        questions:
+          - id: issue_description
+            text: "Please describe your issue in detail:"
+            required: true
+          - id: urgency
+            text: "How urgent is this?"
+            type: choice
+            options:
+              - Low - Can wait a few days
+              - Medium - Need help today
+              - High - Blocking my work
+              - Critical - System down
+    state:
+      set:
+        issue: "{{output.answers.issue_description}}"
+        urgency: "{{output.answers.urgency}}"
+    routing:
+      next: classify
+
+  classify:
+    component.llm-openai:
+      config:
+        model: gpt-4o
+        temperature: 0
+        system: |
+          Classify the IT issue into: password, hardware, software, network, or other.
+          Respond with ONLY the category name.
+        user: "Issue: {{state.issue}}"
+    state:
+      set:
+        category: "{{output.text}}"
+    routing:
+      branches:
+        - condition: "{{output.text}} == 'password'"
+          next: password-handler
+        - condition: "{{output.text}} == 'hardware'"
+          next: hardware-handler
+        - condition: "{{output.text}} == 'software'"
+          next: software-handler
+        - condition: "{{output.text}} == 'network'"
+          next: network-handler
+        - condition: default
+          next: general-handler
+
+  # ... (handler nodes from above)
+
+  ask-resolved:
+    component.qa-process:
+      config:
+        questions:
+          - id: resolved
+            text: "Did this resolve your issue?"
+            type: choice
+            options:
+              - Yes, thank you!
+              - No, I need more help
+    routing:
+      branches:
+        - condition: "{{output.answers.resolved}}.startsWith('Yes')"
+          next: close-resolved
+        - condition: default
+          next: escalate
+
+  close-resolved:
+    component.template:
+      config:
+        template: "Great! Glad I could help. Have a great day!"
+    routing:
+      next: __end__
+
+  escalate:
+    component.template:
+      config:
+        template: "Escalating to a human agent. Ticket: ESC-{{timestamp}}"
+    routing:
+      next: __end__`}
+/>
+
+## Test Your Flow
+
+<Terminal
+  client:visible
+  lines={[
+    { type: 'command', content: 'greentic-dev flow run -f support.ygtc' },
+    { type: 'success', content: 'Welcome to IT Support! ...', delay: 500 },
+    { type: 'command', content: "I forgot my password and can't log in", delay: 1000 },
+    { type: 'output', content: 'Please describe your issue in detail:', delay: 500 },
+    { type: 'output', content: '> I forgot my password and can\'t log into my laptop', delay: 500 },
+    { type: 'output', content: 'How urgent is this?', delay: 500 },
+    { type: 'output', content: '> High - Blocking my work', delay: 500 },
+    { type: 'output', content: 'Classifying issue...', delay: 500 },
+    { type: 'success', content: '[Adaptive Card: Password Reset Request]', delay: 1000 },
+  ]}
+/>
+
+## What You Learned
+
+In this tutorial, you learned:
+
+- ✅ Structured Q&A collection with `qa-process`
+- ✅ LLM integration for classification
+- ✅ Conditional routing with branches
+- ✅ Rich UI with Adaptive Cards
+- ✅ State management across nodes
+- ✅ Follow-up flows and escalation
+
+## Next Steps
+
+Ready for the advanced tutorial?
+
+- **[Demo 3: RAG System](/tutorials/demo-3-rag-system)** — Build a full-stack knowledge base
+- **[Messaging Channels](/docs/messaging/overview)** — Deploy to Teams, Slack, etc.
+- **[MCP Integration](/docs/mcp/overview)** — Connect to external tools

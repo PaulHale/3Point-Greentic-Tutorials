@@ -1,0 +1,213 @@
+---
+title: Messaging Overview
+description: Connect your digital workers to Teams, Slack, WhatsApp, Telegram, WebChat, and Webex.
+order: 1
+---
+
+# Messaging Channels
+
+Greentic's messaging platform connects your digital workers to users wherever they are. Six channels are supported out of the box.
+
+## Supported Channels
+
+| Channel | Status | Features |
+|---------|--------|----------|
+| Microsoft Teams | GA | Rich cards, mentions, threads |
+| Slack | GA | Blocks, modals, slash commands |
+| Telegram | GA | Inline keyboards, media |
+| WhatsApp | GA | Templates, media, buttons |
+| WebChat | GA | Embeddable, customisable |
+| Webex | Beta | Cards, spaces, mentions |
+
+## Architecture
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Teams     │     │   Slack     │     │  WhatsApp   │
+│   Client    │     │   Client    │     │   Client    │
+└──────┬──────┘     └──────┬──────┘     └──────┬──────┘
+       │                   │                   │
+       ▼                   ▼                   ▼
+┌──────────────────────────────────────────────────────┐
+│                  Messaging Gateway                    │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐           │
+│  │  Teams   │  │  Slack   │  │ WhatsApp │  ...      │
+│  │ Adapter  │  │ Adapter  │  │ Adapter  │           │
+│  └──────────┘  └──────────┘  └──────────┘           │
+└──────────────────────────┬───────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────┐
+│                  Flow Runner                          │
+│              (Executes YGTC flows)                   │
+└──────────────────────────────────────────────────────┘
+```
+
+Each adapter normalises channel-specific formats into a common message structure.
+
+## Common Message Format
+
+Regardless of channel, messages are normalised to:
+
+```typescript
+interface Message {
+  id: string;
+  channel: 'teams' | 'slack' | 'telegram' | 'whatsapp' | 'webchat' | 'webex';
+  tenant: string;
+  user: {
+    id: string;
+    name?: string;
+    email?: string;
+  };
+  conversation: {
+    id: string;
+    type: 'personal' | 'group' | 'channel';
+  };
+  text: string;
+  attachments?: Attachment[];
+  metadata?: Record<string, unknown>;
+  timestamp: string;
+}
+```
+
+## Rich Responses
+
+Digital workers can send rich responses that adapt to each channel:
+
+### Adaptive Cards
+
+Adaptive Cards render natively on Teams, WebChat, and Webex:
+
+```yaml
+nodes:
+  respond:
+    component.adaptive-card:
+      config:
+        card:
+          type: AdaptiveCard
+          body:
+            - type: TextBlock
+              text: "Hello!"
+```
+
+### Slack Blocks
+
+For Slack, blocks are automatically converted:
+
+```yaml
+nodes:
+  respond:
+    component.slack-blocks:
+      config:
+        blocks:
+          - type: section
+            text:
+              type: mrkdwn
+              text: "*Hello!*"
+```
+
+### Fallback Text
+
+Always include plain text for channels that don't support rich content:
+
+```yaml
+nodes:
+  respond:
+    component.adaptive-card:
+      config:
+        card:
+          type: AdaptiveCard
+          body:
+            - type: TextBlock
+              text: "Welcome!"
+        fallback_text: "Welcome!"
+```
+
+## Configuration
+
+### Per-Tenant Configuration
+
+Each tenant has separate channel configuration:
+
+```toml
+# config/tenants/acme.toml
+[channels.teams]
+app_id = "..."
+app_secret = "${TEAMS_APP_SECRET}"
+tenant_id = "..."
+
+[channels.slack]
+bot_token = "${SLACK_BOT_TOKEN}"
+signing_secret = "${SLACK_SIGNING_SECRET}"
+```
+
+### Environment Variables
+
+Sensitive values should be in environment or secrets:
+
+```bash
+TEAMS_APP_SECRET=...
+SLACK_BOT_TOKEN=xoxb-...
+WHATSAPP_ACCESS_TOKEN=...
+```
+
+## Channel-Specific Features
+
+### Teams
+
+- **Proactive messaging** — Send messages without user trigger
+- **@mentions** — Tag users and channels
+- **Task modules** — Open modal dialogs
+- **Tabs** — Embed in Teams tabs
+
+### Slack
+
+- **Slash commands** — `/greentic help`
+- **Modals** — Interactive forms
+- **Home tab** — Custom app home
+- **Shortcuts** — Message and global shortcuts
+
+### WhatsApp
+
+- **Message templates** — Pre-approved templates
+- **Interactive buttons** — Quick reply buttons
+- **Lists** — Selection lists
+- **Media** — Images, documents, audio
+
+### Telegram
+
+- **Inline keyboards** — Button grids
+- **Bot commands** — `/start`, `/help`
+- **Groups** — Bot in group chats
+- **Channels** — Post to channels
+
+### WebChat
+
+- **Embedding** — JavaScript widget
+- **Customisation** — Full CSS control
+- **Typing indicators** — Real-time feedback
+- **File upload** — Attachments
+
+## Testing
+
+Test flows against multiple channels locally:
+
+```bash
+# Test as Teams
+greentic-dev flow run -f my-flow.ygtc --channel teams
+
+# Test as Slack
+greentic-dev flow run -f my-flow.ygtc --channel slack
+
+# Test with WebChat UI
+greentic-dev flow run -f my-flow.ygtc --webchat
+```
+
+## Next Steps
+
+Dive deeper into specific channels:
+
+- **[Teams Integration](/docs/messaging/teams)**
+- **[Slack Integration](/docs/messaging/slack)**
+- **[WhatsApp Integration](/docs/messaging/whatsapp)**
+- **[WebChat Integration](/docs/messaging/webchat)**

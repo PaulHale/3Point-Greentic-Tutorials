@@ -1,0 +1,279 @@
+---
+title: MCP Overview
+description: Integrate external tools and data into your digital workers using the Model Context Protocol.
+order: 1
+---
+
+# MCP Integration
+
+The Model Context Protocol (MCP) enables digital workers to interact with external tools and data sources. Greentic provides native MCP support through the `greentic-mcp` module.
+
+## What is MCP?
+
+MCP is a standard protocol for connecting AI models to external capabilities:
+
+- **Tools** — Functions the AI can call (search, calculate, send email)
+- **Resources** — Data sources the AI can read (documents, databases)
+- **Prompts** — Reusable prompt templates
+
+## Architecture
+
+import { McpArchitectureDiagram } from '@/components/diagrams/McpArchitectureDiagram';
+
+<McpArchitectureDiagram client:load className="my-8" />
+
+## Using MCP Tools in Flows
+
+### Direct Tool Invocation
+
+Call a specific tool from your flow:
+
+```yaml
+nodes:
+  search:
+    component.mcp-tool:
+      config:
+        tool: vector-search
+        params:
+          query: "{{state.user_query}}"
+          top_k: 5
+    state:
+      set:
+        results: "{{output.results}}"
+```
+
+### LLM with Tool Access
+
+Let the LLM decide which tools to call:
+
+```yaml
+nodes:
+  assistant:
+    component.llm-openai:
+      config:
+        model: gpt-4o
+        tools:
+          - name: search
+            description: Search the knowledge base
+          - name: calculate
+            description: Perform calculations
+        tool_choice: auto
+```
+
+## Configuring MCP Tools
+
+Tools are configured in `mcp-config.json`:
+
+```json
+{
+  "tools": {
+    "weather": {
+      "type": "http",
+      "endpoint": "https://api.weather.com/v1",
+      "method": "GET",
+      "auth": {
+        "type": "api-key",
+        "header": "X-API-Key",
+        "secret": "WEATHER_API_KEY"
+      },
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "location": { "type": "string" }
+          },
+          "required": ["location"]
+        }
+      }
+    }
+  }
+}
+```
+
+### Tool Types
+
+| Type | Description |
+|------|-------------|
+| `http` | REST API call |
+| `grpc` | gRPC service call |
+| `wasm` | Local Wasm component |
+| `exec` | Shell command (sandboxed) |
+
+### Authentication
+
+Supported auth methods:
+
+```json
+// API Key
+"auth": {
+  "type": "api-key",
+  "header": "Authorization",
+  "prefix": "Bearer ",
+  "secret": "MY_API_KEY"
+}
+
+// OAuth
+"auth": {
+  "type": "oauth",
+  "provider": "google",
+  "scopes": ["drive.read"]
+}
+
+// mTLS
+"auth": {
+  "type": "mtls",
+  "cert": "/certs/client.pem",
+  "key": "/certs/client-key.pem"
+}
+```
+
+## Creating Custom Tools
+
+### Define the Tool Schema
+
+```json
+{
+  "tools": {
+    "my-tool": {
+      "type": "http",
+      "endpoint": "http://my-service/api",
+      "method": "POST",
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "data": { "type": "string" }
+          },
+          "required": ["data"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "result": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### Use in Flows
+
+```yaml
+nodes:
+  process:
+    component.mcp-tool:
+      config:
+        tool: my-tool
+        params:
+          data: "{{message.text}}"
+```
+
+## Standard Tool Library
+
+Greentic provides common tools out of the box:
+
+| Tool | Description |
+|------|-------------|
+| `web-search` | Search the web |
+| `web-fetch` | Fetch a URL |
+| `file-read` | Read files |
+| `file-write` | Write files |
+| `http-request` | Generic HTTP |
+| `sql-query` | Database queries |
+
+### Example: Web Search
+
+```yaml
+nodes:
+  search:
+    component.mcp-tool:
+      config:
+        tool: web-search
+        params:
+          query: "{{state.question}}"
+          max_results: 5
+```
+
+## Error Handling
+
+Tools can fail. Handle errors gracefully:
+
+```yaml
+nodes:
+  fetch-data:
+    component.mcp-tool:
+      config:
+        tool: api-call
+        params:
+          endpoint: "{{state.url}}"
+        on_error: continue  # or 'fail'
+    routing:
+      branches:
+        - condition: "{{output.error}}"
+          next: handle-error
+        - condition: default
+          next: process-data
+```
+
+## Rate Limiting
+
+Configure rate limits per tool:
+
+```json
+{
+  "tools": {
+    "api-call": {
+      "type": "http",
+      "endpoint": "...",
+      "rate_limit": {
+        "requests": 100,
+        "period": "1m"
+      }
+    }
+  }
+}
+```
+
+## Observability
+
+All tool calls are traced:
+
+```
+Span: mcp-tool.weather
+├── tool: weather
+├── params: {"location": "London"}
+├── duration: 234ms
+├── status: success
+└── result: {"temp": 15, "conditions": "cloudy"}
+```
+
+## Security
+
+### Capability Controls
+
+Tools require explicit capability grants:
+
+```json
+{
+  "tools": {
+    "database": {
+      "capabilities": ["network", "secrets:DB_PASSWORD"]
+    }
+  }
+}
+```
+
+### Sandboxing
+
+Tool execution is sandboxed:
+- No access to host filesystem (except explicitly granted)
+- Network restricted to allowed endpoints
+- CPU and memory limits enforced
+
+## Next Steps
+
+- **[MCP Tools Reference](/docs/mcp/tools)** — Full tool documentation
+- **[MCP Integration Guide](/docs/mcp/integration)** — Advanced patterns
+- **[Tutorial: RAG System](/tutorials/demo-3-rag-system)** — MCP in practice

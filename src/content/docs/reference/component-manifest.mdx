@@ -1,0 +1,517 @@
+---
+title: "Component Manifest"
+description: "Specification for component.manifest.json files"
+---
+
+# Component Manifest
+
+Every Greentic component includes a `component.manifest.json` file that describes the component's identity, capabilities, configuration schema, and interface.
+
+## Overview
+
+The manifest serves as:
+- Self-documentation for the component
+- Configuration validation schema
+- Capability declaration for security
+- Interface contract definition
+
+## Basic Structure
+
+```json
+{
+  "$schema": "https://greentic-ai.github.io/greentic-component/schemas/v1/component.manifest.schema.json",
+  "name": "my-component",
+  "namespace": "ai.greentic",
+  "version": "1.0.0",
+  "description": "A sample component",
+  "wit_world": "greentic:component@0.5.0",
+  "capabilities": {},
+  "config_schema": {}
+}
+```
+
+## Required Fields
+
+### name
+
+Component identifier (lowercase, hyphens allowed):
+
+```json
+{
+  "name": "llm-openai"
+}
+```
+
+### namespace
+
+Organisation namespace (reverse domain):
+
+```json
+{
+  "namespace": "ai.greentic"
+}
+```
+
+### version
+
+Semantic version:
+
+```json
+{
+  "version": "1.2.3"
+}
+```
+
+### wit_world
+
+WIT world the component implements:
+
+```json
+{
+  "wit_world": "greentic:component@0.5.0"
+}
+```
+
+## Optional Fields
+
+### description
+
+Human-readable description:
+
+```json
+{
+  "description": "OpenAI LLM integration for chat completions"
+}
+```
+
+### authors
+
+Component authors:
+
+```json
+{
+  "authors": [
+    "Greentic Team <team@greentic.ai>"
+  ]
+}
+```
+
+### license
+
+License identifier:
+
+```json
+{
+  "license": "Apache-2.0"
+}
+```
+
+### repository
+
+Source repository URL:
+
+```json
+{
+  "repository": "https://github.com/greentic-ai/component-llm-openai"
+}
+```
+
+### keywords
+
+Searchable keywords:
+
+```json
+{
+  "keywords": ["llm", "openai", "gpt", "chat"]
+}
+```
+
+## Capabilities
+
+Declare what the component needs access to:
+
+### Network
+
+```json
+{
+  "capabilities": {
+    "network": {
+      "allowed_hosts": [
+        "api.openai.com",
+        "*.azure.com"
+      ],
+      "allowed_ports": [443],
+      "protocols": ["https"]
+    }
+  }
+}
+```
+
+### Filesystem
+
+```json
+{
+  "capabilities": {
+    "filesystem": {
+      "read": ["/data/models", "/config"],
+      "write": ["/tmp"]
+    }
+  }
+}
+```
+
+### Environment Variables
+
+```json
+{
+  "capabilities": {
+    "environment": {
+      "allowed_vars": [
+        "OPENAI_API_KEY",
+        "MODEL_NAME"
+      ]
+    }
+  }
+}
+```
+
+### Secrets
+
+```json
+{
+  "capabilities": {
+    "secrets": {
+      "required": ["api_key"],
+      "optional": ["org_id"]
+    }
+  }
+}
+```
+
+### State
+
+```json
+{
+  "capabilities": {
+    "state": {
+      "read": true,
+      "write": true,
+      "max_size_bytes": 1048576
+    }
+  }
+}
+```
+
+### Complete Capabilities Example
+
+```json
+{
+  "capabilities": {
+    "network": {
+      "allowed_hosts": ["api.openai.com"],
+      "protocols": ["https"]
+    },
+    "secrets": {
+      "required": ["openai_api_key"]
+    },
+    "state": {
+      "read": true,
+      "write": false
+    }
+  }
+}
+```
+
+## Configuration Schema
+
+Define the configuration the component accepts using JSON Schema:
+
+### Basic Schema
+
+```json
+{
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "model": {
+        "type": "string",
+        "description": "Model identifier",
+        "default": "gpt-4"
+      },
+      "temperature": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 2,
+        "default": 0.7
+      }
+    },
+    "required": ["model"]
+  }
+}
+```
+
+### With Enums
+
+```json
+{
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "model": {
+        "type": "string",
+        "enum": ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"]
+      },
+      "response_format": {
+        "type": "string",
+        "enum": ["text", "json"],
+        "default": "text"
+      }
+    }
+  }
+}
+```
+
+### Nested Objects
+
+```json
+{
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "model": {
+        "type": "string"
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "temperature": {
+            "type": "number"
+          },
+          "max_tokens": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### Arrays
+
+```json
+{
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "stop_sequences": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 4
+      },
+      "tools": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "description": { "type": "string" }
+          },
+          "required": ["name"]
+        }
+      }
+    }
+  }
+}
+```
+
+### Conditional Schemas
+
+```json
+{
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "provider": {
+        "type": "string",
+        "enum": ["openai", "azure"]
+      }
+    },
+    "allOf": [
+      {
+        "if": {
+          "properties": { "provider": { "const": "azure" } }
+        },
+        "then": {
+          "properties": {
+            "deployment_name": { "type": "string" },
+            "api_version": { "type": "string" }
+          },
+          "required": ["deployment_name"]
+        }
+      }
+    ]
+  }
+}
+```
+
+## Resource Limits
+
+Declare resource requirements:
+
+```json
+{
+  "resources": {
+    "memory_mb": 256,
+    "cpu_time_ms": 30000,
+    "max_execution_time_ms": 60000
+  }
+}
+```
+
+## Input/Output Schema
+
+Define expected input and output:
+
+```json
+{
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "messages": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "role": { "type": "string" },
+            "content": { "type": "string" }
+          }
+        }
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "response": {
+        "type": "string"
+      },
+      "usage": {
+        "type": "object",
+        "properties": {
+          "prompt_tokens": { "type": "integer" },
+          "completion_tokens": { "type": "integer" }
+        }
+      }
+    }
+  }
+}
+```
+
+## Complete Example
+
+```json
+{
+  "$schema": "https://greentic-ai.github.io/greentic-component/schemas/v1/component.manifest.schema.json",
+  "name": "llm-openai",
+  "namespace": "ai.greentic",
+  "version": "1.2.0",
+  "description": "OpenAI LLM integration for chat completions and embeddings",
+  "authors": ["Greentic Team <team@greentic.ai>"],
+  "license": "Apache-2.0",
+  "repository": "https://github.com/greentic-ai/component-llm-openai",
+  "keywords": ["llm", "openai", "gpt", "chat", "embeddings"],
+  "wit_world": "greentic:component@0.5.0",
+
+  "capabilities": {
+    "network": {
+      "allowed_hosts": ["api.openai.com"],
+      "protocols": ["https"]
+    },
+    "secrets": {
+      "required": ["openai_api_key"],
+      "optional": ["openai_org_id"]
+    }
+  },
+
+  "resources": {
+    "memory_mb": 128,
+    "cpu_time_ms": 30000
+  },
+
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "model": {
+        "type": "string",
+        "description": "OpenAI model identifier",
+        "enum": ["gpt-4", "gpt-4-turbo", "gpt-4o", "gpt-3.5-turbo"],
+        "default": "gpt-4"
+      },
+      "temperature": {
+        "type": "number",
+        "description": "Sampling temperature (0-2)",
+        "minimum": 0,
+        "maximum": 2,
+        "default": 0.7
+      },
+      "max_tokens": {
+        "type": "integer",
+        "description": "Maximum tokens in response",
+        "minimum": 1,
+        "maximum": 128000
+      },
+      "system": {
+        "type": "string",
+        "description": "System prompt"
+      },
+      "tools": {
+        "type": "array",
+        "description": "Available tools for function calling",
+        "items": {
+          "type": "string"
+        }
+      },
+      "response_format": {
+        "type": "string",
+        "enum": ["text", "json_object"],
+        "default": "text"
+      }
+    },
+    "required": ["model"]
+  }
+}
+```
+
+## Validation
+
+Validate your manifest:
+
+```bash
+greentic-dev component validate --path ./my-component
+```
+
+## File Locations
+
+Standard component structure:
+
+```
+my-component/
+├── Cargo.toml
+├── component.manifest.json     # The manifest
+├── src/
+│   └── lib.rs
+├── schemas/
+│   └── v1/
+│       └── config.schema.json  # Optional: external schema
+└── wit/
+    └── world.wit               # WIT interface definition
+```
+
+## Related
+
+- [Components](/docs/architecture/components) - Component concepts
+- [CLI Reference](/docs/reference/cli) - CLI commands
+- [YGTC Schema](/docs/reference/ygtc-schema) - Flow specification

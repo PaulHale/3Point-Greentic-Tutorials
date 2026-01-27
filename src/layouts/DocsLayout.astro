@@ -1,0 +1,93 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import Header from '@/components/layout/Header.astro';
+import Footer from '@/components/layout/Footer.astro';
+import DocsSidebar from '@/components/layout/DocsSidebar.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  image?: string;
+  frontmatter?: {
+    title: string;
+    description?: string;
+  };
+}
+
+const { title, description, image, frontmatter } = Astro.props;
+const pageTitle = frontmatter?.title || title;
+const pageDescription = frontmatter?.description || description;
+---
+
+<BaseLayout title={pageTitle} description={pageDescription} image={image}>
+  <div class="flex min-h-screen flex-col">
+    <Header />
+    <div class="flex-1">
+      <div class="container mx-auto max-w-7xl px-4 py-8 md:px-6">
+        <div class="flex gap-8 lg:gap-12">
+          <!-- Sidebar -->
+          <div class="hidden w-64 shrink-0 lg:block">
+            <DocsSidebar />
+          </div>
+
+          <!-- Main content -->
+          <main class="min-w-0 flex-1">
+            <article class="prose-greentic max-w-none">
+              <slot />
+            </article>
+          </main>
+
+          <!-- Table of contents placeholder -->
+          <div class="hidden w-56 shrink-0 xl:block">
+            <div class="sticky top-20">
+              <h4 class="mb-4 text-sm font-semibold text-foreground">On this page</h4>
+              <nav id="toc" class="text-sm">
+                <!-- TOC will be populated by client-side script -->
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <Footer />
+  </div>
+</BaseLayout>
+
+<script>
+  // Generate table of contents from headings
+  function generateTOC() {
+    const article = document.querySelector('article');
+    const toc = document.getElementById('toc');
+    if (!article || !toc) return;
+
+    const headings = article.querySelectorAll('h2, h3');
+    if (headings.length === 0) return;
+
+    const ul = document.createElement('ul');
+    ul.className = 'space-y-2';
+
+    headings.forEach((heading) => {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+
+      // Generate ID if not present
+      if (!heading.id) {
+        heading.id = heading.textContent?.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '') || '';
+      }
+
+      a.href = `#${heading.id}`;
+      a.textContent = heading.textContent;
+      a.className =
+        heading.tagName === 'H3'
+          ? 'block pl-4 text-muted-foreground hover:text-foreground transition-colors'
+          : 'block text-muted-foreground hover:text-foreground transition-colors';
+
+      li.appendChild(a);
+      ul.appendChild(li);
+    });
+
+    toc.appendChild(ul);
+  }
+
+  generateTOC();
+</script>

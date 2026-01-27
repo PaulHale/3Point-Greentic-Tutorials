@@ -1,0 +1,324 @@
+---
+title: "WebChat"
+description: "Embed Greentic digital workers in your website with WebChat"
+---
+
+# WebChat Integration
+
+Embed a customisable chat widget in your website to connect users directly to your Greentic flows.
+
+## Overview
+
+WebChat provides:
+
+- Embeddable chat widget
+- Customisable styling and branding
+- Real-time messaging
+- File uploads
+- Typing indicators
+- Message history
+- Mobile responsive design
+
+## Quick Start
+
+### 1. Add the Script
+
+Include the WebChat script in your HTML:
+
+```html
+<script src="https://cdn.greentic.ai/webchat/v1/webchat.min.js"></script>
+```
+
+### 2. Initialise
+
+```html
+<script>
+  GreenticWebChat.init({
+    tenantId: 'your-tenant-id',
+    flowId: 'your-flow-id',
+    apiUrl: 'https://your-greentic-instance.com'
+  });
+</script>
+```
+
+That's it! A chat button will appear in the bottom-right corner.
+
+## Configuration Options
+
+```javascript
+GreenticWebChat.init({
+  // Required
+  tenantId: 'your-tenant-id',
+  flowId: 'support-flow',
+  apiUrl: 'https://api.greentic.ai',
+
+  // Optional - Appearance
+  theme: {
+    primaryColor: '#22C55E',
+    textColor: '#1F2937',
+    backgroundColor: '#FFFFFF',
+    fontFamily: 'Inter, sans-serif'
+  },
+
+  // Optional - Behaviour
+  autoOpen: false,
+  autoOpenDelay: 5000,  // ms
+  welcomeMessage: 'Hi! How can we help?',
+  placeholder: 'Type your message...',
+
+  // Optional - Position
+  position: 'bottom-right', // or 'bottom-left'
+  offsetX: 20,
+  offsetY: 20,
+
+  // Optional - Features
+  enableFileUpload: true,
+  enableTypingIndicator: true,
+  enableSoundNotifications: true,
+  persistHistory: true,
+
+  // Optional - User info
+  user: {
+    id: 'user-123',
+    name: 'John Doe',
+    email: 'john@example.com',
+    metadata: {
+      plan: 'enterprise',
+      company: 'ACME Corp'
+    }
+  }
+});
+```
+
+## Styling
+
+### CSS Custom Properties
+
+```css
+:root {
+  --greentic-primary: #22C55E;
+  --greentic-primary-hover: #16A34A;
+  --greentic-background: #FFFFFF;
+  --greentic-surface: #F9FAFB;
+  --greentic-text: #1F2937;
+  --greentic-text-muted: #6B7280;
+  --greentic-border: #E5E7EB;
+  --greentic-radius: 12px;
+  --greentic-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+```
+
+### Custom CSS
+
+```css
+/* Chat button */
+.greentic-launcher {
+  width: 60px;
+  height: 60px;
+}
+
+/* Chat window */
+.greentic-window {
+  width: 400px;
+  height: 600px;
+  max-height: 80vh;
+}
+
+/* Messages */
+.greentic-message-bot {
+  background: var(--greentic-surface);
+}
+
+.greentic-message-user {
+  background: var(--greentic-primary);
+  color: white;
+}
+```
+
+## React Integration
+
+Use the React component:
+
+```bash
+npm install @greentic/webchat-react
+```
+
+```tsx
+import { GreenticWebChat } from '@greentic/webchat-react';
+
+function App() {
+  return (
+    <GreenticWebChat
+      tenantId="your-tenant-id"
+      flowId="support-flow"
+      apiUrl="https://api.greentic.ai"
+      theme={{
+        primaryColor: '#22C55E'
+      }}
+      onMessage={(message) => {
+        console.log('New message:', message);
+      }}
+      onOpen={() => console.log('Chat opened')}
+      onClose={() => console.log('Chat closed')}
+    />
+  );
+}
+```
+
+## API Methods
+
+### Programmatic Control
+
+```javascript
+// Open chat
+GreenticWebChat.open();
+
+// Close chat
+GreenticWebChat.close();
+
+// Toggle chat
+GreenticWebChat.toggle();
+
+// Send message programmatically
+GreenticWebChat.sendMessage('Hello!');
+
+// Update user info
+GreenticWebChat.setUser({
+  id: 'user-456',
+  name: 'Jane Doe'
+});
+
+// Clear history
+GreenticWebChat.clearHistory();
+
+// Destroy widget
+GreenticWebChat.destroy();
+```
+
+### Events
+
+```javascript
+GreenticWebChat.on('open', () => {
+  console.log('Chat opened');
+});
+
+GreenticWebChat.on('close', () => {
+  console.log('Chat closed');
+});
+
+GreenticWebChat.on('message', (message) => {
+  console.log('Message received:', message);
+});
+
+GreenticWebChat.on('error', (error) => {
+  console.error('WebChat error:', error);
+});
+```
+
+## Flow Integration
+
+### Handling WebChat Messages
+
+```yaml
+id: webchat-support
+type: messaging
+channel: webchat
+start: greet
+
+nodes:
+  greet:
+    component.template:
+      config:
+        template: "Hello {{message.user.name}}! How can I help?"
+    routing:
+      next: classify
+```
+
+### Rich Responses
+
+Send structured content:
+
+```yaml
+nodes:
+  send-options:
+    component.webchat-rich:
+      config:
+        type: quick_replies
+        text: "What would you like to do?"
+        replies:
+          - title: "Check Order"
+            payload: "check_order"
+          - title: "Return Item"
+            payload: "return_item"
+          - title: "Talk to Human"
+            payload: "human_handoff"
+```
+
+### Cards
+
+```yaml
+nodes:
+  show-products:
+    component.webchat-rich:
+      config:
+        type: carousel
+        items:
+          - title: "Product A"
+            subtitle: "$99.00"
+            image: "https://example.com/a.jpg"
+            buttons:
+              - title: "Buy Now"
+                payload: "buy_a"
+          - title: "Product B"
+            subtitle: "$149.00"
+            image: "https://example.com/b.jpg"
+            buttons:
+              - title: "Buy Now"
+                payload: "buy_b"
+```
+
+## Authentication
+
+### JWT Authentication
+
+```javascript
+GreenticWebChat.init({
+  tenantId: 'your-tenant-id',
+  flowId: 'secure-flow',
+  apiUrl: 'https://api.greentic.ai',
+  authToken: 'eyJhbGciOiJIUzI1NiIs...',
+  onAuthRequired: async () => {
+    // Fetch new token when expired
+    const token = await fetchNewToken();
+    return token;
+  }
+});
+```
+
+## Best Practices
+
+1. **Load asynchronously** - Don't block page load
+2. **Customise branding** - Match your site's design
+3. **Set user context** - Pre-fill known information
+4. **Handle offline** - Show appropriate messages
+5. **Test mobile** - Ensure responsive behaviour
+
+## Troubleshooting
+
+### Widget not appearing
+
+- Check browser console for errors
+- Verify tenant ID and flow ID
+- Ensure API URL is accessible
+
+### Messages not sending
+
+- Check network connectivity
+- Verify authentication if required
+- Check flow is active
+
+## Related
+
+- [Messaging Overview](/docs/messaging/overview) - Multi-channel concepts
+- [Demo 3: RAG System](/tutorials/demo-3-rag-system) - Full-stack with WebChat
+- [Flows](/docs/architecture/flows) - Flow definitions

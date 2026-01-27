@@ -1,0 +1,216 @@
+---
+title: Packs
+description: Signed, versioned bundles for distributing digital workers through the Greentic supply chain.
+order: 4
+---
+
+# Packs
+
+Packs are the unit of distribution in Greentic. They are signed, versioned bundles that contain everything needed to deploy a digital worker.
+
+## What's in a Pack?
+
+A pack (`.gtpack` file) contains:
+
+- **Flows** — YGTC files defining the worker's behaviour
+- **Component References** — Manifests for required components
+- **Configuration Schemas** — Validation for runtime config
+- **Metadata** — Version, author, signatures, dependencies
+
+```
+my-worker.gtpack
+├── manifest.json
+├── flows/
+│   ├── main.ygtc
+│   └── ingestion.ygtc
+├── components/
+│   ├── llm-openai.manifest.json
+│   └── adaptive-card.manifest.json
+├── schemas/
+│   └── config.schema.json
+└── signatures/
+    └── manifest.sig
+```
+
+## Pack Manifest
+
+The `manifest.json` describes the pack:
+
+```json
+{
+  "$schema": "https://greentic-ai.github.io/greentic-pack/schemas/v1/pack.manifest.schema.json",
+  "name": "it-support-worker",
+  "version": "1.0.0",
+  "description": "IT support assistant with LLM classification",
+  "author": {
+    "name": "Greentic Team",
+    "email": "team@greentic.ai"
+  },
+  "license": "MIT",
+  "flows": [
+    {
+      "id": "it-support",
+      "file": "flows/main.ygtc",
+      "type": "messaging",
+      "entrypoint": true
+    }
+  ],
+  "components": [
+    "component.llm-openai@0.1.0",
+    "component.adaptive-card@0.1.0",
+    "component.qa-process@0.1.0"
+  ],
+  "config_schema": "schemas/config.schema.json"
+}
+```
+
+## Building Packs
+
+### From a Single Flow
+
+```bash
+greentic-dev pack build -f my-flow.ygtc -o dist/my-worker.gtpack
+```
+
+### From a Directory
+
+```bash
+greentic-dev pack build -d ./my-project -o dist/my-worker.gtpack
+```
+
+### With Custom Manifest
+
+```bash
+greentic-dev pack build --manifest pack.manifest.json -o dist/my-worker.gtpack
+```
+
+## Signing Packs
+
+All packs should be signed for integrity and authenticity:
+
+```bash
+# Generate a signing key
+greentic-dev keys generate --output ~/.greentic/signing-key.pem
+
+# Build and sign
+greentic-dev pack build -f my-flow.ygtc -o dist/my-worker.gtpack --sign ~/.greentic/signing-key.pem
+```
+
+### Verifying Signatures
+
+```bash
+greentic-dev pack verify dist/my-worker.gtpack --key public-key.pem
+```
+
+## Deploying Packs
+
+### Local Testing
+
+```bash
+greentic-dev pack run -p dist/my-worker.gtpack --mocks on
+```
+
+### To a Runner
+
+```bash
+greentic-dev pack deploy -p dist/my-worker.gtpack --runner https://runner.example.com
+```
+
+### Through the Distributor
+
+```bash
+greentic-dev pack publish -p dist/my-worker.gtpack --store https://store.greentic.ai
+```
+
+## Versioning
+
+Packs follow [Semantic Versioning](https://semver.org/):
+
+- **Major** — Breaking changes to flows or config
+- **Minor** — New features, backward compatible
+- **Patch** — Bug fixes, no API changes
+
+```bash
+# Bump version
+greentic-dev pack version patch  # 1.0.0 -> 1.0.1
+greentic-dev pack version minor  # 1.0.1 -> 1.1.0
+greentic-dev pack version major  # 1.1.0 -> 2.0.0
+```
+
+## Dependencies
+
+Packs can depend on specific component versions:
+
+```json
+{
+  "components": [
+    "component.llm-openai@^0.1.0",
+    "component.adaptive-card@~0.1.2"
+  ]
+}
+```
+
+Version specifiers:
+- `1.0.0` — Exact version
+- `^1.0.0` — Compatible with 1.x.x
+- `~1.0.0` — Compatible with 1.0.x
+- `>=1.0.0` — At least version 1.0.0
+
+## Configuration
+
+Runtime configuration is validated against the pack's schema:
+
+```json
+// schemas/config.schema.json
+{
+  "type": "object",
+  "properties": {
+    "llm_model": {
+      "type": "string",
+      "default": "gpt-4o"
+    },
+    "max_retries": {
+      "type": "integer",
+      "default": 3
+    }
+  }
+}
+```
+
+Deploy with configuration:
+
+```bash
+greentic-dev pack deploy -p my-worker.gtpack --config production.json
+```
+
+## Best Practices
+
+### Keep Packs Focused
+
+One pack, one purpose. Don't bundle unrelated flows.
+
+### Version Everything
+
+Always include version in the manifest. Enable rollbacks.
+
+### Sign All Production Packs
+
+Never deploy unsigned packs to production.
+
+### Document Configuration
+
+Include clear descriptions in your config schema.
+
+### Test Before Publishing
+
+Run local tests before publishing to the store:
+
+```bash
+greentic-dev pack test -p my-worker.gtpack
+```
+
+## Next Steps
+
+- **[Supply Chain](/docs/architecture/supply-chain)** — How packs flow through the system
+- **[CLI Reference](/docs/reference/cli)** — Full pack command documentation
+- **[Tutorial: Build a Pack](/tutorials/demo-1-hello-world)** — Hands-on pack building

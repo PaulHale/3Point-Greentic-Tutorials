@@ -1,0 +1,135 @@
+---
+title: "Multi-tenancy"
+description: "Complete tenant isolation and identity propagation in Greentic"
+---
+
+# Multi-tenancy
+
+Greentic is designed from the ground up as a **multi-tenant platform**. Every API call, every flow execution, and every component invocation carries tenant context, ensuring complete isolation between organisations.
+
+## TenantCtx
+
+The `TenantCtx` structure is the cornerstone of multi-tenancy in Greentic:
+
+```rust
+pub struct TenantCtx {
+    pub tenant_id: TenantId,
+    pub team_id: Option<TeamId>,
+    pub user_id: Option<UserId>,
+    pub correlation_id: CorrelationId,
+    pub timestamp: DateTime<Utc>,
+}
+```
+
+### Fields
+
+| Field | Description |
+|-------|-------------|
+| `tenant_id` | Unique identifier for the organisation |
+| `team_id` | Optional team within the tenant |
+| `user_id` | Optional user making the request |
+| `correlation_id` | Request tracing identifier |
+| `timestamp` | When the context was created |
+
+## Propagation
+
+TenantCtx is propagated through every layer of the system:
+
+```
+User Request
+    ↓
+Messaging Gateway (extracts tenant from auth)
+    ↓
+Flow Runner (passes ctx to each node)
+    ↓
+Component (receives ctx in every call)
+    ↓
+State Store (scopes all data by tenant)
+    ↓
+External Services (includes tenant in headers)
+```
+
+## Isolation Guarantees
+
+### Data Isolation
+
+All data stores are scoped by tenant:
+
+- **State Store**: Keys are prefixed with `{tenant_id}:{key}`
+- **Session Store**: Sessions include tenant in the primary key
+- **Pack Store**: Packs are stored in tenant-specific paths
+- **Secrets**: Secrets are encrypted with tenant-specific keys
+
+### Execution Isolation
+
+- Each tenant's flows run in separate Wasm instances
+- Resource limits are enforced per-tenant
+- CPU and memory quotas prevent noisy neighbours
+
+### Network Isolation
+
+- External API calls include tenant identification
+- OAuth tokens are stored per-tenant
+- Webhook endpoints are tenant-scoped
+
+## Configuration
+
+Tenants can be configured in the platform settings:
+
+```yaml
+tenants:
+  acme-corp:
+    display_name: "ACME Corporation"
+    tier: enterprise
+    limits:
+      max_flows: 100
+      max_components: 50
+      max_concurrent_executions: 20
+    features:
+      custom_components: true
+      priority_execution: true
+```
+
+## Per-Tenant Settings
+
+Flows can access tenant-specific configuration:
+
+```yaml
+nodes:
+  configure:
+    component.script:
+      config:
+        script: |
+          let api_url = ctx.tenant.settings.api_endpoint;
+          let timeout = ctx.tenant.settings.timeout_ms;
+```
+
+## Audit Trail
+
+All tenant actions are logged for compliance:
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00Z",
+  "tenant_id": "acme-corp",
+  "user_id": "user-123",
+  "action": "flow.execute",
+  "resource": "it-support-flow",
+  "correlation_id": "req-abc-123",
+  "outcome": "success"
+}
+```
+
+## Best Practices
+
+1. **Always validate TenantCtx** at system boundaries
+2. **Never hardcode tenant IDs** in flows or components
+3. **Use tenant-scoped secrets** for API keys
+4. **Log tenant context** in all error messages
+5. **Test with multiple tenants** in development
+
+## Related
+
+- [Security](/docs/architecture/security) - Security model and controls
+- [Components](/docs/architecture/components) - How components receive tenant context
+- [Flows](/docs/architecture/flows) - Tenant-aware flow execution

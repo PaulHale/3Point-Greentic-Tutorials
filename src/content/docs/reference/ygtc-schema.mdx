@@ -1,0 +1,471 @@
+---
+title: "YGTC Schema"
+description: "Complete specification for YGTC flow files"
+---
+
+# YGTC Schema
+
+YGTC (YAML Greentic Configuration) is the declarative format for defining flows in Greentic.
+
+## Overview
+
+A YGTC file defines:
+- Flow metadata (id, type, description)
+- Nodes that execute components
+- Routing between nodes
+- State management
+- MCP configuration
+
+## Basic Structure
+
+```yaml
+# Flow metadata
+id: my-flow
+type: messaging
+description: A sample flow
+version: "1.0.0"
+start: entry-node
+
+# Optional MCP configuration
+mcp:
+  enabled: true
+  tools: []
+
+# Node definitions
+nodes:
+  entry-node:
+    component.name:
+      config:
+        key: value
+    routing:
+      next: exit-node
+
+  exit-node:
+    component.other:
+      config: {}
+```
+
+## Flow Metadata
+
+### Required Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique identifier (lowercase, hyphens allowed) |
+| `type` | enum | Flow type: `messaging`, `events`, `http`, `job` |
+| `start` | string | Name of the first node to execute |
+
+### Optional Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `description` | string | Human-readable description |
+| `version` | string | Semantic version |
+| `channel` | string | Messaging channel filter |
+| `trigger` | string | Event trigger (for type: events) |
+
+### Flow Types
+
+#### messaging
+
+Triggered by incoming messages:
+
+```yaml
+id: chat-bot
+type: messaging
+channel: teams  # Optional: filter to specific channel
+start: greet
+```
+
+#### events
+
+Triggered by external events:
+
+```yaml
+id: webhook-handler
+type: events
+trigger: webhook.received
+start: process
+```
+
+#### http
+
+Triggered by HTTP requests:
+
+```yaml
+id: api-endpoint
+type: http
+method: POST
+path: /api/submit
+start: validate
+```
+
+#### job
+
+Scheduled or manually triggered:
+
+```yaml
+id: daily-report
+type: job
+schedule: "0 9 * * *"  # Cron syntax
+start: generate
+```
+
+## Nodes
+
+### Node Structure
+
+```yaml
+nodes:
+  node-name:
+    component.namespace:
+      config:
+        # Component configuration
+    state:
+      # State operations
+    routing:
+      # Next node(s)
+```
+
+### Component Reference
+
+Components are referenced as `component.name` or `namespace.component.name`:
+
+```yaml
+nodes:
+  call-llm:
+    component.llm-openai:
+      config:
+        model: gpt-4
+        temperature: 0.7
+```
+
+### Configuration
+
+Pass configuration to components:
+
+```yaml
+nodes:
+  template:
+    component.template:
+      config:
+        template: "Hello {{name}}!"
+
+  http:
+    component.http:
+      config:
+        url: "https://api.example.com/data"
+        method: GET
+        headers:
+          Authorization: "Bearer {{secrets.api_key}}"
+```
+
+### Template Syntax
+
+Use Handlebars-style templates:
+
+```yaml
+config:
+  template: "Hello {{message.from.name}}"
+  data:
+    user_id: "{{message.from.id}}"
+    timestamp: "{{ctx.timestamp}}"
+```
+
+Available contexts:
+- `message` - Incoming message
+- `state` - Flow state
+- `session` - Session data
+- `secrets` - Secret values
+- `env` - Environment variables
+- `ctx` - Execution context
+
+## State Management
+
+### Set State
+
+```yaml
+nodes:
+  save-data:
+    component.template:
+      config:
+        template: "Saved!"
+    state:
+      set:
+        user_name: "{{message.text}}"
+        counter: 1
+```
+
+### Read State
+
+```yaml
+nodes:
+  use-data:
+    component.template:
+      config:
+        template: "Hello {{state.user_name}}!"
+```
+
+### Increment/Modify
+
+```yaml
+state:
+  set:
+    counter: "{{state.counter + 1}}"
+  append:
+    history: "{{message.text}}"
+```
+
+### Clear State
+
+```yaml
+state:
+  clear:
+    - temp_data
+    - user_input
+```
+
+## Routing
+
+### Simple Routing
+
+```yaml
+routing:
+  next: next-node
+```
+
+### End Flow
+
+```yaml
+routing:
+  next: __end__
+```
+
+### Conditional Routing
+
+```yaml
+routing:
+  conditions:
+    - when: "{{state.intent}} == 'help'"
+      next: help-node
+    - when: "{{state.intent}} == 'quit'"
+      next: goodbye-node
+  default: fallback-node
+```
+
+### Condition Operators
+
+| Operator | Example |
+|----------|---------|
+| `==` | `{{state.x}} == 'value'` |
+| `!=` | `{{state.x}} != 'value'` |
+| `>` | `{{state.count}} > 5` |
+| `<` | `{{state.count}} < 10` |
+| `>=` | `{{state.count}} >= 1` |
+| `<=` | `{{state.count}} <= 100` |
+| `contains` | `{{message.text}} contains 'help'` |
+| `startsWith` | `{{message.text}} startsWith '/'` |
+| `exists` | `{{state.user_id}} exists` |
+| `!exists` | `{{state.user_id}} !exists` |
+
+### Multiple Conditions
+
+```yaml
+routing:
+  conditions:
+    - when: "{{state.authenticated}} == true && {{state.role}} == 'admin'"
+      next: admin-panel
+    - when: "{{state.authenticated}} == true"
+      next: user-dashboard
+  default: login
+```
+
+## MCP Configuration
+
+### Enable MCP
+
+```yaml
+mcp:
+  enabled: true
+```
+
+### Define Tools
+
+```yaml
+mcp:
+  enabled: true
+  tools:
+    - name: search
+      component: component.vector-search
+      config:
+        store: knowledge-base
+    - name: send_email
+      component: component.email
+      config:
+        from: "{{env.EMAIL_FROM}}"
+```
+
+### Prompts
+
+```yaml
+mcp:
+  prompts:
+    assistant: |
+      You are a helpful assistant.
+      Use the search tool to find relevant information.
+```
+
+## Error Handling
+
+### On Error
+
+```yaml
+nodes:
+  risky-operation:
+    component.http:
+      config:
+        url: "{{api_url}}"
+    on_error:
+      next: error-handler
+
+  error-handler:
+    component.template:
+      config:
+        template: "Sorry, something went wrong: {{error.message}}"
+```
+
+### Retry
+
+```yaml
+nodes:
+  with-retry:
+    component.http:
+      config:
+        url: "{{api_url}}"
+    retry:
+      max_attempts: 3
+      delay_ms: 1000
+      backoff: exponential
+```
+
+## Timeouts
+
+```yaml
+nodes:
+  long-operation:
+    component.llm-openai:
+      config:
+        model: gpt-4
+    timeout_ms: 30000
+```
+
+## Comments
+
+```yaml
+# This is a comment
+id: my-flow
+type: messaging
+
+nodes:
+  # Entry point of the flow
+  entry:
+    component.template:
+      config:
+        template: "Welcome!"  # Inline comment
+```
+
+## Complete Example
+
+```yaml
+# IT Support Flow
+# Handles user support requests via chat
+
+id: it-support-flow
+type: messaging
+description: Intelligent IT support assistant
+version: "1.2.0"
+start: greet
+
+mcp:
+  enabled: true
+  tools:
+    - name: search_kb
+      component: component.vector-search
+      config:
+        store: it-knowledge-base
+  prompts:
+    support: |
+      You are an IT support assistant.
+      Use the search_kb tool to find relevant documentation.
+      Be helpful and concise.
+
+nodes:
+  greet:
+    component.template:
+      config:
+        template: "Hello! I'm your IT support assistant. How can I help?"
+    routing:
+      next: classify
+
+  classify:
+    component.llm-openai:
+      config:
+        model: gpt-3.5-turbo
+        system: "Classify: password, software, hardware, other"
+    state:
+      set:
+        intent: "{{response.classification}}"
+    routing:
+      conditions:
+        - when: "{{state.intent}} == 'password'"
+          next: password-reset
+        - when: "{{state.intent}} == 'software'"
+          next: software-help
+      default: general-help
+
+  password-reset:
+    component.template:
+      config:
+        template: "I'll help you reset your password. Please visit: https://reset.company.com"
+    routing:
+      next: __end__
+
+  software-help:
+    component.llm-openai:
+      config:
+        model: gpt-4
+        system: "{{prompts.support}}"
+        tools:
+          - search_kb
+    routing:
+      next: __end__
+
+  general-help:
+    component.llm-openai:
+      config:
+        model: gpt-4
+        system: "{{prompts.support}}"
+        tools:
+          - search_kb
+    routing:
+      next: __end__
+```
+
+## Schema Validation
+
+Validate your flow against the schema:
+
+```bash
+greentic-dev flow validate -f my-flow.ygtc --strict
+```
+
+Full JSON Schema available at:
+```
+https://raw.githubusercontent.com/greentic-ai/greentic-flow/refs/heads/master/schemas/ygtc.flow.schema.json
+```
+
+## Related
+
+- [Flows](/docs/architecture/flows) - Flow concepts
+- [CLI Reference](/docs/reference/cli) - CLI commands
+- [Component Manifest](/docs/reference/component-manifest) - Component specification

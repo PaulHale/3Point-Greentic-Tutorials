@@ -1,0 +1,127 @@
+---
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import Card from '@/components/ui/Card.astro';
+import Badge from '@/components/ui/Badge.astro';
+import { tutorialItems } from '@/lib/navigation';
+
+const tutorials = [
+  {
+    ...tutorialItems[0],
+    difficulty: 'beginner' as const,
+    duration: '15 mins',
+    topics: ['Flows', 'Templating', 'Local Development'],
+  },
+  {
+    ...tutorialItems[1],
+    difficulty: 'intermediate' as const,
+    duration: '45 mins',
+    topics: ['LLM', 'Adaptive Cards', 'State', 'Routing'],
+  },
+  {
+    ...tutorialItems[2],
+    difficulty: 'advanced' as const,
+    duration: '90 mins',
+    topics: ['RAG', 'Astro', 'WebChat', 'MCP', 'Full-Stack'],
+  },
+];
+
+const difficultyColors = {
+  beginner: 'success',
+  intermediate: 'warning',
+  advanced: 'danger',
+} as const;
+---
+
+<MarketingLayout title="Tutorials" description="Step-by-step guides to building digital workers with Greentic">
+  <div class="container mx-auto max-w-5xl px-4 py-16 md:px-6">
+    <header class="text-center mb-16">
+      <h1 class="text-4xl md:text-5xl font-bold text-foreground mb-4">Tutorials</h1>
+      <p class="text-xl text-muted-foreground max-w-2xl mx-auto">
+        Learn to build digital workers from simple echo bots to full-stack RAG systems.
+      </p>
+    </header>
+
+    <div class="space-y-6">
+      {
+        tutorials.map((tutorial, index) => (
+          <a href={tutorial.href} class="group block">
+            <Card hover class="p-6">
+              <div class="flex items-start gap-6">
+                {/* Number badge */}
+                <div
+                  class={`
+                    w-14 h-14 rounded-xl flex items-center justify-center shrink-0 text-xl font-bold
+                    ${
+                      tutorial.difficulty === 'beginner'
+                        ? 'bg-green-500/10 text-green-500'
+                        : tutorial.difficulty === 'intermediate'
+                          ? 'bg-yellow-500/10 text-yellow-500'
+                          : 'bg-red-500/10 text-red-500'
+                    }
+                  `}
+                >
+                  {index + 1}
+                </div>
+
+                {/* Content */}
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-start justify-between gap-4 mb-2">
+                    <h2 class="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
+                      {tutorial.title}
+                    </h2>
+                    <div class="flex items-center gap-2 shrink-0">
+                      <Badge variant={difficultyColors[tutorial.difficulty]}>
+                        {tutorial.difficulty.charAt(0).toUpperCase() + tutorial.difficulty.slice(1)}
+                      </Badge>
+                      <span class="text-sm text-muted-foreground">{tutorial.duration}</span>
+                    </div>
+                  </div>
+
+                  <p class="text-muted-foreground mb-4">{tutorial.description}</p>
+
+                  {/* Topics */}
+                  <div class="flex flex-wrap gap-2">
+                    {tutorial.topics.map((topic) => (
+                      <span class="px-2 py-1 text-xs rounded bg-muted text-muted-foreground">{topic}</span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Arrow */}
+                <div class="text-muted-foreground group-hover:text-primary transition-colors">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-5 h-5">
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+            </Card>
+          </a>
+        ))
+      }
+    </div>
+
+    {/* Additional help section */}
+    <div class="mt-16 p-8 rounded-xl bg-muted/30 border border-border text-center">
+      <h3 class="text-xl font-semibold text-foreground mb-2">Need More Help?</h3>
+      <p class="text-muted-foreground mb-4">
+        Check out the documentation or ask questions on GitHub Discussions.
+      </p>
+      <div class="flex justify-center gap-4">
+        <a
+          href="/docs"
+          class="px-4 py-2 rounded-lg bg-card border border-border hover:bg-muted text-foreground text-sm font-medium transition-colors"
+        >
+          Read the Docs
+        </a>
+        <a
+          href="https://github.com/greentic-ai/greentic/discussions"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="px-4 py-2 rounded-lg bg-card border border-border hover:bg-muted text-foreground text-sm font-medium transition-colors"
+        >
+          Ask a Question
+        </a>
+      </div>
+    </div>
+  </div>
+</MarketingLayout>

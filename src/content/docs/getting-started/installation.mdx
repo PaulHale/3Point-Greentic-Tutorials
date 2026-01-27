@@ -1,0 +1,146 @@
+---
+title: Installation
+description: Get Greentic installed on your system and verify the setup.
+order: 2
+---
+
+# Installation
+
+This guide walks you through installing Greentic and its dependencies on your development machine.
+
+## Prerequisites
+
+Before installing Greentic, ensure you have:
+
+- **Rust** — Version 1.85 or later ([rustup.rs](https://rustup.rs))
+- **Node.js** — Version 20 or later (for WebChat development)
+- **Docker** — For running local services (optional)
+
+### Install Rust
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+### Add the Wasm Target
+
+Greentic components compile to WebAssembly. Add the required target:
+
+```bash
+rustup target add wasm32-wasip2
+```
+
+## Install the CLI
+
+The `greentic-dev` CLI is your primary tool for developing digital workers.
+
+### From Source
+
+Clone the repository and build:
+
+```bash
+git clone https://github.com/greentic-ai/greentic.git
+cd greentic/greentic-dev
+cargo install --path crates/greentic-dev
+```
+
+### Verify Installation
+
+```bash
+greentic-dev --version
+# greentic-dev 0.1.0
+```
+
+## Configure Your Environment
+
+Create a configuration file at `~/.greentic/config.toml`:
+
+```toml
+[telemetry]
+enabled = true
+endpoint = "http://localhost:4317"
+
+[secrets]
+provider = "env"
+
+[runtime]
+log_level = "info"
+```
+
+## Optional: Set Up Local Services
+
+For full local development, you may want to run supporting services:
+
+### OpenTelemetry Collector
+
+```bash
+docker run -d \
+  --name otel-collector \
+  -p 4317:4317 \
+  -p 4318:4318 \
+  otel/opentelemetry-collector:latest
+```
+
+### Redis (for State)
+
+```bash
+docker run -d \
+  --name redis \
+  -p 6379:6379 \
+  redis:latest
+```
+
+## Verify Your Setup
+
+Run the verification command to check everything is working:
+
+```bash
+greentic-dev doctor
+```
+
+You should see output like:
+
+```
+Checking Greentic development environment...
+
+✓ Rust toolchain: 1.85.0
+✓ Wasm target: wasm32-wasip2
+✓ greentic-dev: 0.1.0
+✓ Config file: ~/.greentic/config.toml
+✓ Telemetry: enabled
+
+All checks passed! Ready to build digital workers.
+```
+
+## Troubleshooting
+
+### Wasm Target Not Found
+
+If you see errors about the Wasm target, ensure it's installed:
+
+```bash
+rustup target add wasm32-wasip2
+```
+
+### Permission Denied
+
+On macOS/Linux, you may need to adjust permissions:
+
+```bash
+chmod +x ~/.cargo/bin/greentic-dev
+```
+
+### Config File Issues
+
+Ensure your config file has valid TOML syntax. Use a validator:
+
+```bash
+greentic-dev config validate
+```
+
+## Next Steps
+
+With Greentic installed, you're ready to build your first digital worker:
+
+- **[Quickstart Guide](/docs/getting-started/quickstart)** — Create a simple echo bot
+- **[CLI Reference](/docs/reference/cli)** — Full CLI documentation

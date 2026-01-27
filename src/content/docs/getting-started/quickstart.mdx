@@ -1,0 +1,166 @@
+---
+title: Quickstart
+description: Build your first Greentic digital worker in under 10 minutes.
+order: 3
+---
+
+# Quickstart
+
+In this guide, you'll create a simple digital worker that echoes back messages. This introduces the core concepts without overwhelming complexity.
+
+## Create a New Flow
+
+First, create a directory for your project:
+
+```bash
+mkdir my-first-worker
+cd my-first-worker
+```
+
+Create a flow file called `echo.ygtc`:
+
+```yaml
+# echo.ygtc
+id: echo-flow
+type: messaging
+description: A simple echo bot that repeats what you say
+start: echo
+
+nodes:
+  echo:
+    component.template:
+      config:
+        template: "You said: {{message.text}}"
+    routing:
+      next: __end__
+```
+
+## Validate the Flow
+
+Before running, validate your flow to catch any errors:
+
+```bash
+greentic-dev flow validate -f echo.ygtc
+```
+
+You should see:
+
+```
+✓ Flow 'echo-flow' is valid
+  Type: messaging
+  Nodes: 1
+  Start: echo
+```
+
+## Run Locally
+
+Start the local development server:
+
+```bash
+greentic-dev flow run -f echo.ygtc
+```
+
+This starts an interactive console where you can test your flow:
+
+```
+Greentic Dev Server
+Flow: echo-flow
+Type: messaging
+
+> Hello, world!
+You said: Hello, world!
+
+> Testing 123
+You said: Testing 123
+```
+
+Press `Ctrl+C` to stop the server.
+
+## Add More Complexity
+
+Let's make it more interesting. Update your flow to greet the user by name:
+
+```yaml
+# echo.ygtc
+id: echo-flow
+type: messaging
+description: A greeting bot that asks for your name
+start: ask-name
+
+nodes:
+  ask-name:
+    component.template:
+      config:
+        template: "Hello! What's your name?"
+    routing:
+      next: greet
+
+  greet:
+    component.template:
+      config:
+        template: "Nice to meet you, {{message.text}}! How can I help you today?"
+    routing:
+      next: echo
+
+  echo:
+    component.template:
+      config:
+        template: "You asked: {{message.text}}"
+    routing:
+      next: echo
+```
+
+Run again to see the multi-step conversation:
+
+```bash
+greentic-dev flow run -f echo.ygtc
+```
+
+```
+> (conversation starts)
+Hello! What's your name?
+
+> Claude
+Nice to meet you, Claude! How can I help you today?
+
+> What's the weather like?
+You asked: What's the weather like?
+```
+
+## Build a Pack
+
+When you're ready to distribute your worker, build it into a pack:
+
+```bash
+greentic-dev pack build -f echo.ygtc -o dist/echo.gtpack
+```
+
+This creates a signed, versioned bundle that can be deployed anywhere.
+
+## What's Next?
+
+You've just built your first digital worker! Here's where to go from here:
+
+### Learn the Architecture
+
+- **[Components](/docs/architecture/components)** — Understand the Wasm component model
+- **[Flows](/docs/architecture/flows)** — Deep dive into YGTC flow syntax
+- **[Packs](/docs/architecture/packs)** — Learn about distribution and deployment
+
+### Build Something Real
+
+- **[Tutorial 1: Hello World](/tutorials/demo-1-hello-world)** — Extended version of this quickstart
+- **[Tutorial 2: IT Support Bot](/tutorials/demo-2-it-support)** — Add LLM intelligence
+- **[Tutorial 3: RAG System](/tutorials/demo-3-rag-system)** — Full-stack knowledge base
+
+### Connect to Channels
+
+- **[Messaging Overview](/docs/messaging/overview)** — Connect to Teams, Slack, etc.
+- **[WebChat](/docs/messaging/webchat)** — Embed chat in your website
+
+## Key Takeaways
+
+1. **Flows are YAML** — Declarative, readable, version-controlled
+2. **Nodes invoke components** — Each node runs a specific piece of logic
+3. **Routing connects nodes** — Simple flow from one step to the next
+4. **Packs bundle everything** — Ready for secure distribution
