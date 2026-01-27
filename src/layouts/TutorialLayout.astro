@@ -21,6 +21,7 @@ const { title, description, image, frontmatter } = Astro.props;
 const pageTitle = frontmatter?.title || title;
 const pageDescription = frontmatter?.description || description;
 const currentPath = Astro.url.pathname;
+const base = import.meta.env.BASE_URL;
 
 const difficultyColors = {
   beginner: 'bg-green-500/20 text-green-500',
@@ -41,19 +42,22 @@ const difficultyColors = {
               <nav class="space-y-2">
                 <h4 class="font-semibold text-sm text-foreground px-3 mb-4">Tutorials</h4>
                 {
-                  tutorialItems.map((item) => (
-                    <a
-                      href={item.href}
-                      class:list={[
-                        'block px-3 py-2 text-sm rounded-md transition-colors',
-                        currentPath === item.href
-                          ? 'bg-primary/10 text-primary font-medium'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-                      ]}
-                    >
-                      {item.title}
-                    </a>
-                  ))
+                  tutorialItems.map((item) => {
+                    const itemHref = `${base}${item.href.slice(1)}`;
+                    return (
+                      <a
+                        href={itemHref}
+                        class:list={[
+                          'block px-3 py-2 text-sm rounded-md transition-colors',
+                          currentPath === itemHref
+                            ? 'bg-primary/10 text-primary font-medium'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                        ]}
+                      >
+                        {item.title}
+                      </a>
+                    );
+                  })
                 }
               </nav>
             </aside>

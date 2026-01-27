@@ -2,6 +2,8 @@
 import DocsLayout from '@/layouts/DocsLayout.astro';
 import Card from '@/components/ui/Card.astro';
 import { docsNavSections } from '@/lib/navigation';
+
+const base = import.meta.env.BASE_URL;
 ---
 
 <DocsLayout title="Documentation">
@@ -18,7 +20,7 @@ import { docsNavSections } from '@/lib/navigation';
             <h2 class="text-2xl font-semibold text-foreground mb-4">{section.title}</h2>
             <div class="grid md:grid-cols-2 gap-4">
               {section.items.map((item) => (
-                <a href={item.href} class="group">
+                <a href={`${base}${item.href.slice(1)}`} class="group">
                   <Card hover class="h-full p-4">
                     <h3 class="font-semibold text-foreground group-hover:text-primary transition-colors">
                       {item.title}

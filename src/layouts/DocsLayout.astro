@@ -54,7 +54,7 @@ const pageDescription = frontmatter?.description || description;
 </BaseLayout>
 
 <script>
-  // Generate table of contents from headings
+  // Generate table of contents from headings with scroll-based highlighting
   function generateTOC() {
     const article = document.querySelector('article');
     const toc = document.getElementById('toc');
@@ -65,6 +65,8 @@ const pageDescription = frontmatter?.description || description;
 
     const ul = document.createElement('ul');
     ul.className = 'space-y-2';
+
+    const tocLinks: HTMLAnchorElement[] = [];
 
     headings.forEach((heading) => {
       const li = document.createElement('li');
@@ -77,16 +79,64 @@ const pageDescription = frontmatter?.description || description;
 
       a.href = `#${heading.id}`;
       a.textContent = heading.textContent;
+      a.dataset.headingId = heading.id;
       a.className =
         heading.tagName === 'H3'
           ? 'block pl-4 text-muted-foreground hover:text-foreground transition-colors'
           : 'block text-muted-foreground hover:text-foreground transition-colors';
 
+      tocLinks.push(a);
       li.appendChild(a);
       ul.appendChild(li);
     });
 
     toc.appendChild(ul);
+
+    // Set up Intersection Observer for scroll-based highlighting
+    const observerOptions = {
+      root: null,
+      rootMargin: '-80px 0px -70% 0px',
+      threshold: 0,
+    };
+
+    let currentActiveId = '';
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          currentActiveId = entry.target.id;
+          updateActiveLink(currentActiveId);
+        }
+      });
+    }, observerOptions);
+
+    headings.forEach((heading) => observer.observe(heading));
+
+    function updateActiveLink(activeId: string) {
+      tocLinks.forEach((link) => {
+        const isActive = link.dataset.headingId === activeId;
+        const isH3 = link.classList.contains('pl-4');
+
+        if (isActive) {
+          link.className = isH3
+            ? 'block pl-4 text-primary font-medium transition-colors'
+            : 'block text-primary font-medium transition-colors';
+        } else {
+          link.className = isH3
+            ? 'block pl-4 text-muted-foreground hover:text-foreground transition-colors'
+            : 'block text-muted-foreground hover:text-foreground transition-colors';
+        }
+      });
+    }
+
+    // Handle click to manually set active state
+    tocLinks.forEach((link) => {
+      link.addEventListener('click', () => {
+        if (link.dataset.headingId) {
+          updateActiveLink(link.dataset.headingId);
+        }
+      });
+    });
   }
 
   generateTOC();
