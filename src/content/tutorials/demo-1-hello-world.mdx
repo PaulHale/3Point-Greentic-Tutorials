@@ -154,7 +154,7 @@ Let's make it more interactive by adding a greeting. First, add a step using the
 <Terminal
   client:visible
   lines={[
-    { type: 'command', content: 'greentic-flow add-step --flow flows/echo.ygtc --node-id greet --operation templating.handlebars --payload \'{"text":"Hello! I\\'m an echo bot. Tell me something!"}\' --routing-next echo' },
+    { type: 'command', content: 'greentic-flow add-step --flow flows/echo.ygtc --node-id greet --operation templating.handlebars --config-file greet-config.json --routing-next echo' },
     { type: 'success', content: "✓ Added node 'greet'" },
   ]}
 />
