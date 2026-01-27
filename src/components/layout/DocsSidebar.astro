@@ -24,7 +24,7 @@ const base = import.meta.env.BASE_URL;
                     href={itemHref}
                     class:list={[
                       'block px-3 py-2 text-sm rounded-md transition-colors',
-                      currentPath === itemHref
+                      currentPath.replace(/\/$/, '') === itemHref.replace(/\/$/, '')
                         ? 'bg-primary/10 text-primary font-medium'
                         : 'text-muted-foreground hover:text-foreground hover:bg-muted',
                     ]}
