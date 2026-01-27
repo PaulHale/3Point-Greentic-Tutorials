@@ -78,7 +78,7 @@ mcp:
     - source: retrieval
       component: component.vector-search
       config:
-        query: "{{message.text}}"
+        query: "{{in.text}}"
         top_k: 3
 
 nodes:
@@ -106,10 +106,10 @@ nodes:
       config:
         sources:
           - type: vector
-            query: "{{message.text}}"
+            query: "{{in.text}}"
             store: knowledge-base
           - type: api
-            url: "https://api.internal/user/{{message.from.id}}"
+            url: "https://api.internal/user/{{in.from.id}}"
     routing:
       next: respond
 
@@ -276,9 +276,9 @@ nodes:
     component.mcp-memory:
       config:
         action: store
-        content: "{{message.text}}"
+        content: "{{in.text}}"
         metadata:
-          user_id: "{{message.from.id}}"
+          user_id: "{{in.from.id}}"
           topic: "{{state.current_topic}}"
 ```
 

@@ -92,7 +92,7 @@ nodes:
   greet:
     component.template:
       config:
-        template: "Hi <@{{message.from.id}}>! How can I help you?"
+        template: "Hi <@{{in.from.id}}>! How can I help you?"
     routing:
       next: __end__
 ```
@@ -195,7 +195,7 @@ nodes:
   open-modal:
     component.slack-modal:
       config:
-        trigger_id: "{{message.trigger_id}}"
+        trigger_id: "{{in.trigger_id}}"
         view:
           type: modal
           title:

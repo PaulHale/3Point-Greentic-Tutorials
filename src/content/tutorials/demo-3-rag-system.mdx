@@ -59,7 +59,7 @@ rag-knowledge/
 
 ## Part 2: Create the Astro Frontend
 
-### Initialize Astro Project
+### Initialise Astro Project
 
 <Terminal
   client:visible
@@ -217,57 +217,64 @@ const chatConfig = {
 
 ### The Main RAG Flow
 
+<Terminal
+  client:visible
+  lines={[
+    { type: 'command', content: 'cd ../backend' },
+    { type: 'command', content: 'greentic-flow new --flow flows/rag-knowledge.ygtc --id rag-knowledge --type messaging --name "RAG Knowledge Base"' },
+    { type: 'success', content: "✓ Created flows/rag-knowledge.ygtc" },
+  ]}
+/>
+
 <CodeBlock
   client:visible
   filename="backend/flows/rag-knowledge.ygtc"
   language="yaml"
   code={`id: rag-knowledge
-type: messaging
+title: RAG Knowledge Base
 description: RAG-powered knowledge base assistant
-version: 1.0.0
-start: process-query
+type: messaging
+start: process_query
+
+parameters:
+  embedding_model: text-embedding-3-small
+  chat_model: gpt-4o
+  top_k: 5
 
 nodes:
-  process-query:
-    component.template:
-      config:
-        template: "{{message.text}}"
-    state:
-      set:
-        query: "{{message.text}}"
+  process_query:
+    templating.handlebars:
+      text: "{{in.text}}"
     routing:
-      next: embed-query
+      - to: embed_query
 
-  embed-query:
-    component.llm-openai:
-      config:
-        model: text-embedding-3-small
-        type: embedding
-        input: "{{state.query}}"
-    state:
-      set:
-        query_embedding: "{{output.embedding}}"
+  embed_query:
+    mcp.exec:
+      component: llm
+      action: embed
+      args:
+        model: parameters.embedding_model
+        input: "{{in.text}}"
     routing:
-      next: vector-search
+      - to: vector_search
 
-  vector-search:
-    component.mcp-tool:
-      config:
-        tool: vector-search
-        params:
-          embedding: "{{state.query_embedding}}"
-          top_k: 5
-          collection: knowledge-base
-    state:
-      set:
-        context_docs: "{{output.results}}"
+  vector_search:
+    mcp.exec:
+      component: vector_db
+      action: search
+      args:
+        embedding: embed_query.embedding
+        top_k: parameters.top_k
+        collection: knowledge-base
     routing:
-      next: generate-answer
+      - to: generate_answer
 
-  generate-answer:
-    component.llm-openai:
-      config:
-        model: gpt-4o
+  generate_answer:
+    mcp.exec:
+      component: llm
+      action: chat
+      args:
+        model: parameters.chat_model
         temperature: 0.3
         system: |
           You are a helpful knowledge base assistant. Answer questions based
@@ -281,41 +288,30 @@ nodes:
           2. Supporting details from the context
           3. Source citations at the end
         user: |
-          Question: {{state.query}}
+          Question: {{in.text}}
 
           Context from knowledge base:
-          {{#each state.context_docs}}
+          {{#vector_search.payload.results}}
           ---
-          Document: {{this.title}}
-          Content: {{this.content}}
+          Document: {{title}}
+          Content: {{content}}
           ---
-          {{/each}}
+          {{/vector_search.payload.results}}
     routing:
-      next: format-response
+      - to: format_response
 
-  format-response:
-    component.adaptive-card:
-      config:
-        card:
-          type: AdaptiveCard
-          version: "1.4"
-          body:
-            - type: TextBlock
-              text: "{{output.text}}"
-              wrap: true
-            - type: Container
-              style: emphasis
-              items:
-                - type: TextBlock
-                  text: "Sources:"
-                  weight: Bolder
-                  size: Small
-                - type: TextBlock
-                  text: "{{#each state.context_docs}}• {{this.title}}\\n{{/each}}"
-                  wrap: true
-                  size: Small
+  format_response:
+    templating.handlebars:
+      text: |
+        {{generate_answer.payload.text}}
+
+        ---
+        **Sources:**
+        {{#vector_search.payload.results}}
+        - {{title}}
+        {{/vector_search.payload.results}}
     routing:
-      next: __end__`}
+      - out: true`}
 />
 
 ### Configure MCP Tools
@@ -365,75 +361,82 @@ Create the MCP configuration for vector search:
 
 Create a flow to ingest documents into the knowledge base:
 
+<Terminal
+  client:visible
+  lines={[
+    { type: 'command', content: 'greentic-flow new --flow flows/ingest-document.ygtc --id ingest-document --type job --name "Document Ingestion"' },
+    { type: 'success', content: "✓ Created flows/ingest-document.ygtc" },
+  ]}
+/>
+
 <CodeBlock
   client:visible
   filename="backend/flows/ingest-document.ygtc"
   language="yaml"
   code={`id: ingest-document
-type: job
+title: Document Ingestion
 description: Ingest a document into the knowledge base
-version: 1.0.0
-start: load-document
+type: job
+start: load_document
+
+parameters:
+  chunk_size: 1000
+  chunk_overlap: 200
+  embedding_model: text-embedding-3-small
 
 nodes:
-  load-document:
-    component.file-reader:
-      config:
+  load_document:
+    mcp.exec:
+      component: file_reader
+      action: read
+      args:
         path: "{{input.file_path}}"
-    state:
-      set:
-        content: "{{output.content}}"
-        title: "{{input.title}}"
     routing:
-      next: chunk-document
+      - to: chunk_document
 
-  chunk-document:
-    component.text-splitter:
-      config:
-        chunk_size: 1000
-        overlap: 200
+  chunk_document:
+    mcp.exec:
+      component: text_splitter
+      action: split
+      args:
+        text: load_document.content
+        chunk_size: parameters.chunk_size
+        overlap: parameters.chunk_overlap
         separator: "\\n\\n"
-        input: "{{state.content}}"
-    state:
-      set:
-        chunks: "{{output.chunks}}"
     routing:
-      next: embed-chunks
+      - to: embed_chunks
 
-  embed-chunks:
-    component.llm-openai:
-      config:
-        model: text-embedding-3-small
-        type: embedding
-        input: "{{state.chunks}}"
-    state:
-      set:
-        embeddings: "{{output.embeddings}}"
+  embed_chunks:
+    mcp.exec:
+      component: llm
+      action: embed_batch
+      args:
+        model: parameters.embedding_model
+        inputs: chunk_document.chunks
     routing:
-      next: store-vectors
+      - to: store_vectors
 
-  store-vectors:
-    component.mcp-tool:
-      config:
-        tool: document-store
-        params:
-          documents:
-            - title: "{{state.title}}"
-              chunks: "{{state.chunks}}"
-              embeddings: "{{state.embeddings}}"
-          collection: knowledge-base
+  store_vectors:
+    mcp.exec:
+      component: vector_db
+      action: upsert
+      args:
+        documents:
+          title: "{{input.title}}"
+          chunks: chunk_document.chunks
+          embeddings: embed_chunks.embeddings
+        collection: knowledge-base
     routing:
-      next: confirm
+      - to: confirm
 
   confirm:
-    component.template:
-      config:
-        template: |
-          Document "{{state.title}}" ingested successfully!
-          - Chunks created: {{state.chunks.length}}
-          - Collection: knowledge-base
+    templating.handlebars:
+      text: |
+        Document "{{input.title}}" ingested successfully!
+        - Chunks created: {{chunk_document.chunks.length}}
+        - Collection: knowledge-base
     routing:
-      next: __end__`}
+      - out: true`}
 />
 
 ## Part 5: Docker Setup
@@ -508,7 +511,7 @@ After installation, launch the application and:
 
 ## Need Help?
 
-Contact support at support@example.com or visit our help center.`}
+Contact support at support@example.com or visit our help centre.`}
 />
 
 <CodeBlock
@@ -560,14 +563,16 @@ Run the ingestion flow for each document:
 <Terminal
   client:visible
   lines={[
-    { type: 'command', content: 'greentic-dev flow run -f backend/flows/ingest-document.ygtc --input \'{"file_path": "backend/docs/getting-started.md", "title": "Getting Started"}\'' },
+    { type: 'command', content: 'greentic-flow doctor flows/' },
+    { type: 'success', content: "✓ All flows valid" },
+    { type: 'command', content: 'greentic-pack build --in . --gtpack-out dist/rag.gtpack' },
+    { type: 'success', content: '✓ Pack built: dist/rag.gtpack' },
+    { type: 'command', content: 'greentic-dev pack run --pack dist/rag.gtpack --input \'{"file_path": "docs/getting-started.md", "title": "Getting Started"}\' --flow ingest-document' },
     { type: 'output', content: 'Loading document...' },
     { type: 'output', content: 'Chunking: 3 chunks created' },
     { type: 'output', content: 'Embedding chunks...' },
     { type: 'output', content: 'Storing vectors...' },
     { type: 'success', content: 'Document "Getting Started" ingested successfully!' },
-    { type: 'command', content: 'greentic-dev flow run -f backend/flows/ingest-document.ygtc --input \'{"file_path": "backend/docs/api-reference.md", "title": "API Reference"}\'' },
-    { type: 'success', content: 'Document "API Reference" ingested successfully!' },
   ]}
 />
 
@@ -631,7 +636,7 @@ TLS_KEY_PATH=/certs/key.pem`}
 Congratulations! You've built a production-ready RAG system:
 
 - ✅ Astro frontend with WebChat integration
-- ✅ RAG flow with vector search
+- ✅ RAG flow with vector search via `mcp.exec`
 - ✅ Document ingestion pipeline
 - ✅ MCP tool configuration
 - ✅ Docker deployment setup
@@ -642,4 +647,3 @@ Congratulations! You've built a production-ready RAG system:
 - **[Messaging Channels](/docs/messaging/overview)** — Add Teams, Slack support
 - **[MCP Deep Dive](/docs/mcp/overview)** — Create custom tools
 - **[Security Guide](/docs/architecture/security)** — Production hardening
-- **[Telemetry](/docs/reference/telemetry)** — Monitoring and debugging

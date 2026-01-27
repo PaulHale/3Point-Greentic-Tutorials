@@ -24,40 +24,82 @@ import { McpArchitectureDiagram } from '@/components/diagrams/McpArchitectureDia
 
 ## Using MCP Tools in Flows
 
-### Direct Tool Invocation
+### The mcp.exec Operation
 
-Call a specific tool from your flow:
+Call MCP tools using the `mcp.exec` operation in YGTc v2 flows:
 
 ```yaml
 nodes:
   search:
-    component.mcp-tool:
-      config:
-        tool: vector-search
-        params:
-          query: "{{state.user_query}}"
-          top_k: 5
-    state:
-      set:
-        results: "{{output.results}}"
+    mcp.exec:
+      component: vector_db
+      action: search
+      args:
+        query: "{{state.user_query}}"
+        top_k: 5
+    routing:
+      - to: process_results
 ```
 
 ### LLM with Tool Access
 
-Let the LLM decide which tools to call:
+Execute LLM calls that can use tools:
 
 ```yaml
 nodes:
   assistant:
-    component.llm-openai:
-      config:
+    mcp.exec:
+      component: llm
+      action: chat
+      args:
         model: gpt-4o
+        system: "You are a helpful assistant with access to tools."
+        user: "{{in.text}}"
         tools:
           - name: search
             description: Search the knowledge base
           - name: calculate
             description: Perform calculations
-        tool_choice: auto
+    routing:
+      - to: respond
+```
+
+### Weather API Example
+
+```yaml
+id: weather-flow
+type: messaging
+start: collect_location
+
+nodes:
+  collect_location:
+    qa.process:
+      welcome: "Hi! I can tell you the weather."
+      questions:
+        - id: location
+          prompt: "Which city?"
+          answer_type: text
+    routing:
+      - to: get_weather
+
+  get_weather:
+    mcp.exec:
+      component: weather_api
+      action: forecast_weather
+      args:
+        q: collect_location.location
+        days: 3
+    routing:
+      - to: respond
+
+  respond:
+    templating.handlebars:
+      text: |
+        Weather for {{get_weather.payload.location.name}}:
+        Temperature: {{get_weather.payload.current.temp_c}}°C
+        Condition: {{get_weather.payload.current.condition.text}}
+    routing:
+      - out: true
 ```
 
 ## Configuring MCP Tools
@@ -67,22 +109,23 @@ Tools are configured in `mcp-config.json`:
 ```json
 {
   "tools": {
-    "weather": {
+    "weather-api": {
       "type": "http",
-      "endpoint": "https://api.weather.com/v1",
+      "endpoint": "https://api.weatherapi.com/v1/forecast.json",
       "method": "GET",
       "auth": {
         "type": "api-key",
-        "header": "X-API-Key",
+        "header": "key",
         "secret": "WEATHER_API_KEY"
       },
       "schema": {
         "input": {
           "type": "object",
           "properties": {
-            "location": { "type": "string" }
+            "q": { "type": "string", "description": "Location query" },
+            "days": { "type": "integer", "default": 1 }
           },
-          "required": ["location"]
+          "required": ["q"]
         }
       }
     }
@@ -112,11 +155,11 @@ Supported auth methods:
   "secret": "MY_API_KEY"
 }
 
-// OAuth
+// OAuth (via greentic-oauth)
 "auth": {
   "type": "oauth",
-  "provider": "google",
-  "scopes": ["drive.read"]
+  "provider": "msgraph",
+  "scopes": ["Mail.Read", "Chat.ReadWrite"]
 }
 
 // mTLS
@@ -124,6 +167,30 @@ Supported auth methods:
   "type": "mtls",
   "cert": "/certs/client.pem",
   "key": "/certs/client-key.pem"
+}
+```
+
+## WIT Interface
+
+The MCP adapter implements the `wasix:mcp` interface:
+
+```wit
+// wasix:mcp@25.06.18
+package wasix:mcp@25.06.18;
+
+interface tools {
+    record tool-call {
+        name: string,
+        arguments: string,  // JSON
+    }
+
+    record tool-result {
+        content: string,    // JSON
+        is-error: bool,
+    }
+
+    call-tool: func(call: tool-call) -> tool-result;
+    list-tools: func() -> list<tool-descriptor>;
 }
 ```
 
@@ -163,11 +230,13 @@ Supported auth methods:
 ```yaml
 nodes:
   process:
-    component.mcp-tool:
-      config:
-        tool: my-tool
-        params:
-          data: "{{message.text}}"
+    mcp.exec:
+      component: my-service
+      action: my-tool
+      args:
+        data: "{{in.text}}"
+    routing:
+      - to: respond
 ```
 
 ## Standard Tool Library
@@ -183,38 +252,54 @@ Greentic provides common tools out of the box:
 | `http-request` | Generic HTTP |
 | `sql-query` | Database queries |
 
-### Example: Web Search
+### Example: Web Fetch
 
 ```yaml
 nodes:
-  search:
-    component.mcp-tool:
-      config:
-        tool: web-search
-        params:
-          query: "{{state.question}}"
-          max_results: 5
+  fetch:
+    mcp.exec:
+      component: http_tools
+      action: fetch
+      args:
+        url: "https://api.example.com/data"
+        method: GET
+        headers:
+          Accept: application/json
+    routing:
+      - to: process
 ```
 
 ## Error Handling
 
-Tools can fail. Handle errors gracefully:
+Tools can fail. Use conditional routing to handle errors:
 
 ```yaml
 nodes:
-  fetch-data:
-    component.mcp-tool:
-      config:
-        tool: api-call
-        params:
-          endpoint: "{{state.url}}"
-        on_error: continue  # or 'fail'
+  fetch_data:
+    mcp.exec:
+      component: api
+      action: fetch
+      args:
+        endpoint: "{{state.url}}"
     routing:
-      branches:
-        - condition: "{{output.error}}"
-          next: handle-error
-        - condition: default
-          next: process-data
+      - to: handle_error
+      - to: process_data
+
+  handle_error:
+    when:
+      expression: "{{fetch_data.error}} != null"
+    templating.handlebars:
+      text: "Sorry, I couldn't fetch that data: {{fetch_data.error}}"
+    routing:
+      - out: true
+
+  process_data:
+    when:
+      expression: "{{fetch_data.error}} == null"
+    templating.handlebars:
+      text: "Here's your data: {{fetch_data.payload}}"
+    routing:
+      - out: true
 ```
 
 ## Rate Limiting
@@ -238,29 +323,29 @@ Configure rate limits per tool:
 
 ## Observability
 
-All tool calls are traced:
+All tool calls are traced with OpenTelemetry:
 
 ```
-Span: mcp-tool.weather
-├── tool: weather
-├── params: {"location": "London"}
+Span: mcp.exec.weather
+├── component: weather_api
+├── action: forecast_weather
+├── args: {"q": "London", "days": 3}
 ├── duration: 234ms
 ├── status: success
-└── result: {"temp": 15, "conditions": "cloudy"}
+└── result_size: 1.2KB
 ```
 
 ## Security
 
 ### Capability Controls
 
-Tools require explicit capability grants:
+Tools require explicit capability grants in component manifests:
 
 ```json
 {
-  "tools": {
-    "database": {
-      "capabilities": ["network", "secrets:DB_PASSWORD"]
-    }
+  "capabilities": {
+    "network": true,
+    "secrets": ["WEATHER_API_KEY", "DB_PASSWORD"]
   }
 }
 ```
@@ -271,9 +356,36 @@ Tool execution is sandboxed:
 - No access to host filesystem (except explicitly granted)
 - Network restricted to allowed endpoints
 - CPU and memory limits enforced
+- Secrets only accessible via the secrets store
+
+## Component Bindings
+
+MCP tools are bound to nodes via the sidecar file:
+
+```json
+{
+  "schema_version": 1,
+  "nodes": {
+    "get_weather": {
+      "source": {
+        "kind": "remote",
+        "reference": "oci://ghcr.io/greentic-ai/components/weather-mcp:0.1.0"
+      }
+    }
+  }
+}
+```
+
+Use the CLI to manage bindings:
+
+```bash
+greentic-flow bind-component --flow main.ygtc --step get_weather \
+  --component oci://ghcr.io/greentic-ai/components/weather-mcp:0.1.0
+```
 
 ## Next Steps
 
 - **[MCP Tools Reference](/docs/mcp/tools)** — Full tool documentation
 - **[MCP Integration Guide](/docs/mcp/integration)** — Advanced patterns
 - **[Tutorial: RAG System](/tutorials/demo-3-rag-system)** — MCP in practice
+- **[OAuth](/docs/oauth/overview)** — OAuth for tool authentication

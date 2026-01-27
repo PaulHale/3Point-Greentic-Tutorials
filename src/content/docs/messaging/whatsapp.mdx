@@ -81,7 +81,7 @@ nodes:
   greet:
     component.template:
       config:
-        template: "Hello {{message.from.name}}! Welcome to our support. How can we help?"
+        template: "Hello {{in.from.name}}! Welcome to our support. How can we help?"
     routing:
       next: __end__
 ```
@@ -209,7 +209,7 @@ nodes:
           }
     routing:
       conditions:
-        - when: "{{message.type}} == 'image'"
+        - when: "{{in.type}} == 'image'"
           next: process-image
       default: handle-text
 ```

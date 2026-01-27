@@ -4,6 +4,8 @@ description: Understanding WebAssembly components in Greentic - the building blo
 order: 2
 ---
 
+import { ComponentAnatomy } from '@/components/diagrams/ComponentAnatomy';
+
 # Components
 
 Components are the building blocks of Greentic. They are self-describing WebAssembly modules that execute specific logic in a secure sandbox.
@@ -12,7 +14,7 @@ Components are the building blocks of Greentic. They are self-describing WebAsse
 
 A component is a compiled Wasm module that:
 
-- Implements a standard interface (`greentic:component@0.5.0`)
+- Implements a standard interface (`greentic:component`)
 - Declares its capabilities and configuration schema
 - Runs in complete isolation from other components
 - Can be versioned, signed, and distributed
@@ -34,6 +36,8 @@ component-name/
     └── world.wit                 # WIT interface definition
 ```
 
+<ComponentAnatomy client:load className="my-8" />
+
 ### The Manifest
 
 The `component.manifest.json` describes the component:
@@ -41,43 +45,75 @@ The `component.manifest.json` describes the component:
 ```json
 {
   "$schema": "https://greentic-ai.github.io/greentic-component/schemas/v1/component.manifest.schema.json",
-  "name": "component.llm-openai",
+  "name": "my-component",
   "version": "0.1.0",
-  "description": "OpenAI LLM integration for Greentic flows",
-  "author": "Greentic Team",
+  "description": "Description of what this component does",
+  "author": "Your Name",
   "capabilities": {
     "network": true,
-    "secrets": ["OPENAI_API_KEY"]
+    "secrets": ["API_KEY"]
   },
   "config_schema": "schemas/v1/config.schema.json",
-  "wit_world": "greentic:component@0.5.0"
+  "operations": {
+    "handle_message": {
+      "description": "Process an incoming message",
+      "config_schema": "schemas/v1/handle_message.schema.json"
+    }
+  }
 }
 ```
 
 ### The Implementation
 
-Components implement the `handle` function:
+Components use the `component_entrypoint!` macro:
 
 ```rust
 // src/lib.rs
-use greentic_interfaces::exports::greentic::component::handler::*;
+use greentic_interfaces_guest::prelude::*;
 
-struct Component;
+component_entrypoint!(MyComponent);
 
-impl Guest for Component {
-    fn handle(request: Request) -> Response {
-        // Process the request
+struct MyComponent;
+
+impl ComponentHandler for MyComponent {
+    fn handle(request: ComponentRequest) -> ComponentResponse {
+        // Access configuration
+        let config: MyConfig = request.config()?;
+
+        // Access the message
         let message = request.message();
 
-        // Do something with it
-        let result = process_with_llm(message);
+        // Process and return response
+        let result = process_message(&config, message);
 
-        // Return a response
-        Response::new(result)
+        ComponentResponse::ok(result)
     }
 }
+```
 
-export!(Component);
+### dev_flows for Configuration
+
+Components can provide `dev_flows` that guide configuration:
+
+```rust
+impl ComponentDevFlows for MyComponent {
+    fn dev_flows() -> DevFlowsSpec {
+        DevFlowsSpec::builder()
+            .add_question("api_key", "What is your API key?", QuestionType::Secret)
+            .add_question("model", "Which model to use?", QuestionType::Choice {
+                options: vec!["gpt-4o", "gpt-4o-mini", "claude-3"]
+            })
+            .build()
+    }
+}
+```
+
+This enables the CLI to interactively configure flows:
+
+```bash
+greentic-flow add-step --flow main.ygtc --mode config \
+  --node-id llm \
+  --component oci://ghcr.io/greentic-ai/components/llm:latest
 ```
 
 ### The Configuration Schema
@@ -91,7 +127,7 @@ JSON Schema defines valid configuration:
   "properties": {
     "model": {
       "type": "string",
-      "description": "OpenAI model to use",
+      "description": "Model to use",
       "default": "gpt-4o"
     },
     "temperature": {
@@ -118,24 +154,25 @@ Greentic provides several standard components:
 
 | Component | Description |
 |-----------|-------------|
-| `component.llm-openai` | OpenAI GPT models |
-| `component.llm-anthropic` | Anthropic Claude models |
-| `component.llm-azure` | Azure OpenAI service |
+| `component-llm-openai` | OpenAI GPT models |
+| `component-llm-anthropic` | Anthropic Claude models |
+| `component-llm-azure` | Azure OpenAI service |
 
 ### UI Components
 
 | Component | Description |
 |-----------|-------------|
-| `component.adaptive-card` | Microsoft Adaptive Card rendering |
-| `component.template` | Handlebars-style templating |
+| `component-adaptive-card` | Microsoft Adaptive Card rendering |
+| `component-templates` | Handlebars-style templating |
+| `component-oauth-card` | OAuth authentication cards |
 
 ### Processing Components
 
 | Component | Description |
 |-----------|-------------|
-| `component.script-rhai` | Rhai scripting engine |
-| `component.qa-process` | Structured Q&A collection |
-| `component.classifier` | Intent classification |
+| `component-script-rhai` | Rhai scripting engine |
+| `component-qa-process` | Structured Q&A collection |
+| `component-flow2flow` | Flow composition |
 
 ## Creating a Custom Component
 
@@ -144,23 +181,47 @@ Greentic provides several standard components:
 Use the CLI to create a new component:
 
 ```bash
-greentic-dev component new my-component --org ai.greentic
+greentic-component new --name my-component --org ai.greentic --path ./components
 ```
+
+This creates a complete project structure with:
+- Cargo.toml configured for `wasm32-wasip2`
+- Component manifest
+- WIT bindings
+- Example implementation
 
 ### 2. Implement
 
 Edit `src/lib.rs` to implement your logic:
 
 ```rust
-impl Guest for Component {
-    fn handle(request: Request) -> Response {
-        let config: MyConfig = request.config();
+use greentic_interfaces_guest::prelude::*;
+use serde::{Deserialize, Serialize};
+
+component_entrypoint!(MyComponent);
+
+#[derive(Deserialize)]
+struct Config {
+    setting: String,
+    value: i32,
+}
+
+#[derive(Serialize)]
+struct Output {
+    result: String,
+}
+
+struct MyComponent;
+
+impl ComponentHandler for MyComponent {
+    fn handle(request: ComponentRequest) -> ComponentResponse {
+        let config: Config = request.config()?;
         let message = request.message();
 
         // Your custom logic here
-        let result = my_custom_processing(config, message);
+        let result = format!("Processed: {} with {}", message.text, config.setting);
 
-        Response::new(result)
+        ComponentResponse::ok(Output { result })
     }
 }
 ```
@@ -173,12 +234,17 @@ Compile to WebAssembly:
 cargo build --target wasm32-wasip2 --release
 ```
 
+The compiled component will be at:
+```
+target/wasm32-wasip2/release/my_component.wasm
+```
+
 ### 4. Validate
 
 Check your component is valid:
 
 ```bash
-greentic-dev component validate --path .
+greentic-component validate --path .
 ```
 
 ### 5. Test
@@ -192,11 +258,18 @@ start: test
 
 nodes:
   test:
-    my-component:
-      config:
-        setting: value
+    handle_message:
+      setting: "test-value"
+      value: 42
     routing:
-      next: __end__
+      - out: true
+```
+
+Remember to create the sidecar file or use the CLI to bind the component:
+
+```bash
+greentic-flow bind-component --flow flows/test.ygtc --step test \
+  --local-wasm target/wasm32-wasip2/release/my_component.wasm
 ```
 
 ## Capabilities
@@ -209,6 +282,7 @@ Components declare required capabilities in their manifest:
 | `filesystem` | Read/write file access |
 | `secrets` | Access to named secrets |
 | `state` | Key-value state storage |
+| `session` | Session management |
 
 The runtime enforces these capabilities. A component without `network` capability cannot make HTTP requests.
 
@@ -221,6 +295,51 @@ The runtime enforces these capabilities. A component without `network` capabilit
     "filesystem": false
   }
 }
+```
+
+## Host Interfaces
+
+Components can use host-provided interfaces:
+
+### Secrets Store
+
+```rust
+use greentic_interfaces_guest::secrets::SecretsStore;
+
+let api_key = SecretsStore::get("API_KEY")?;
+```
+
+### State Store
+
+```rust
+use greentic_interfaces_guest::state::StateStore;
+
+// Get state
+let count: i32 = StateStore::get("counter")?.unwrap_or(0);
+
+// Set state
+StateStore::set("counter", count + 1)?;
+```
+
+### HTTP Client
+
+```rust
+use greentic_interfaces_guest::http::HttpClient;
+
+let response = HttpClient::get("https://api.example.com/data")
+    .header("Authorization", format!("Bearer {}", api_key))
+    .send()?;
+```
+
+### Session Management
+
+```rust
+use greentic_interfaces_guest::session::Session;
+
+// Pause session (for long operations)
+Session::pause("waiting_for_approval")?;
+
+// Session will resume when triggered
 ```
 
 ## Best Practices
@@ -238,10 +357,10 @@ Use JSON Schema to validate all inputs. Reject invalid data at the boundary.
 Return meaningful error responses rather than panicking:
 
 ```rust
-fn handle(request: Request) -> Response {
-    match try_process(request) {
-        Ok(result) => Response::new(result),
-        Err(e) => Response::error(format!("Processing failed: {}", e)),
+fn handle(request: ComponentRequest) -> ComponentResponse {
+    match try_process(&request) {
+        Ok(result) => ComponentResponse::ok(result),
+        Err(e) => ComponentResponse::error(format!("Processing failed: {}", e)),
     }
 }
 ```
@@ -250,12 +369,38 @@ fn handle(request: Request) -> Response {
 
 Provide clear descriptions in your JSON Schema. Developers will see these in tooling.
 
+### Use dev_flows
+
+Implement `dev_flows` to guide users through configuration. This creates a better developer experience than raw JSON configuration.
+
 ### Version Thoughtfully
 
 Follow semver. Breaking changes require a major version bump.
+
+## Distribution
+
+### OCI Registry
+
+Publish components to OCI registries:
+
+```bash
+# Tag and push
+oras push ghcr.io/greentic-ai/components/my-component:0.1.0 \
+  target/wasm32-wasip2/release/my_component.wasm:application/wasm \
+  component.manifest.json:application/json
+```
+
+### In Packs
+
+Components are typically distributed within packs:
+
+```bash
+greentic-pack build --in ./project --gtpack-out dist/my-pack.gtpack
+```
 
 ## Next Steps
 
 - **[Flows](/docs/architecture/flows)** — How components are wired together
 - **[Packs](/docs/architecture/packs)** — Bundling components for distribution
 - **[Component Manifest Reference](/docs/reference/component-manifest)** — Full manifest specification
+- **[MCP Integration](/docs/mcp/overview)** — Using MCP tools in components

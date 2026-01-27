@@ -87,6 +87,21 @@ export const docsNavSections: NavSection[] = [
     ],
   },
   {
+    title: 'Events',
+    items: [
+      {
+        title: 'Overview',
+        href: '/docs/events/overview',
+        description: 'Multi-tenant event fabric for Greentic',
+      },
+      {
+        title: 'Providers',
+        href: '/docs/events/providers',
+        description: 'Webhook, timer, email, and SMS triggers',
+      },
+    ],
+  },
+  {
     title: 'Messaging',
     items: [
       {
@@ -117,6 +132,16 @@ export const docsNavSections: NavSection[] = [
     ],
   },
   {
+    title: 'OAuth',
+    items: [
+      {
+        title: 'Overview',
+        href: '/docs/oauth/overview',
+        description: 'OAuth broker for third-party API access',
+      },
+    ],
+  },
+  {
     title: 'MCP Integration',
     items: [
       {
@@ -137,12 +162,22 @@ export const docsNavSections: NavSection[] = [
     ],
   },
   {
+    title: 'Operations',
+    items: [
+      {
+        title: 'Operator',
+        href: '/docs/operations/operator',
+        description: 'Local development and demo orchestration',
+      },
+    ],
+  },
+  {
     title: 'Reference',
     items: [
       {
         title: 'CLI',
         href: '/docs/reference/cli',
-        description: 'greentic-dev CLI reference',
+        description: 'Greentic CLI tools reference',
       },
       {
         title: 'YGTC Schema',
@@ -154,6 +189,11 @@ export const docsNavSections: NavSection[] = [
         href: '/docs/reference/component-manifest',
         description: 'Component manifest specification',
       },
+      {
+        title: 'Telemetry',
+        href: '/docs/reference/telemetry',
+        description: 'OpenTelemetry configuration',
+      },
     ],
   },
 ];
@@ -162,7 +202,7 @@ export const tutorialItems: NavItem[] = [
   {
     title: 'Hello World Echo Bot',
     href: '/tutorials/demo-1-hello-world',
-    description: 'Learn the basics of YGTC flows with a simple echo bot',
+    description: 'Learn the basics of YGTc v2 flows with a simple echo bot',
   },
   {
     title: 'IT Support Assistant',

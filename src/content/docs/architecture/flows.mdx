@@ -10,29 +10,39 @@ Flows are declarative YAML files (`.ygtc`) that define how components are wired 
 
 ## Flow Structure
 
-Every flow has this basic structure:
+Every YGTc v2 flow has this basic structure:
 
 ```yaml
 # Required metadata
 id: my-flow
 type: messaging
+start: first_node
+
+# Optional metadata
+title: My Flow
 description: Description of what this flow does
-start: first-node
+
+# Optional flow-level parameters
+parameters:
+  default_value: 42
 
 # Node definitions
 nodes:
-  first-node:
-    component.name:
-      config:
-        setting: value
+  first_node:
+    qa.process:
+      welcome: "Hello!"
+      questions:
+        - id: name
+          prompt: "What's your name?"
+          answer_type: text
     routing:
-      next: second-node
+      - to: second_node
 
-  second-node:
-    component.other:
-      config: {}
+  second_node:
+    templating.handlebars:
+      text: "Nice to meet you, {{first_node.name}}!"
     routing:
-      next: __end__
+      - out: true
 ```
 
 ## Flow Types
@@ -42,10 +52,10 @@ Flows can be one of several types:
 | Type | Trigger | Use Case |
 |------|---------|----------|
 | `messaging` | Incoming message | Chat bots, support agents |
-| `events` | Webhook/event | Triggered automation |
-| `http` | HTTP request | API-like flows |
-| `job` | Scheduled | Background tasks |
-| `component-config` | Component call | Sub-flows |
+| `webhook` | HTTP webhook | Triggered automation |
+| `timer` | Schedule | Background tasks |
+| `websocket` | WebSocket connection | Real-time communication |
+| `pubsub` | Pub/sub events | Event-driven automation |
 
 ### Messaging Flows
 
@@ -54,94 +64,112 @@ Most common type. Triggered by messages from channels:
 ```yaml
 id: support-bot
 type: messaging
-description: IT support assistant
+title: IT Support Assistant
 start: greet
 ```
 
-### Event Flows
+### Webhook Flows
 
-Triggered by external events:
+Triggered by external HTTP webhooks:
 
 ```yaml
-id: new-user-onboarding
-type: events
-description: Welcome new users
-triggers:
-  - event: user.created
-    filter:
-      source: auth-service
-start: send-welcome
+id: github-webhook
+type: webhook
+title: GitHub Integration
+start: process_event
 ```
 
-### HTTP Flows
+### Timer Flows
 
-Act like API endpoints:
+Triggered on a schedule:
 
 ```yaml
-id: status-check
-type: http
-description: Health check endpoint
-method: GET
-path: /health
-start: check
+id: daily-report
+type: timer
+title: Daily Report Generator
+start: generate
 ```
 
 ## Nodes
 
-Nodes are the steps in a flow. Each node invokes a component with configuration.
+Nodes are the steps in a flow. Each node invokes an operation with configuration.
 
 ### Basic Node
 
 ```yaml
 nodes:
   process:
-    component.llm-openai:
-      config:
+    mcp.exec:
+      component: llm
+      action: chat
+      args:
         model: gpt-4o
         temperature: 0.7
     routing:
-      next: respond
+      - to: respond
 ```
 
-### Node with Multiple Outputs
+Key points:
+- **One operation key** per node (e.g., `mcp.exec`, `qa.process`, `templating.handlebars`)
+- **Config directly under operation** — no `config:` wrapper
+- **Routing as array** with `to:`, `out:`, or `reply:` keys
+
+### Node with Q&A
+
+The `qa.process` operation collects structured information:
 
 ```yaml
 nodes:
-  classify:
-    component.classifier:
-      config:
-        categories:
-          - billing
-          - technical
-          - other
+  collect_info:
+    qa.process:
+      welcome: "Hi! I need some information."
+      questions:
+        - id: issue
+          prompt: "Please describe your issue:"
+          answer_type: text
+          required: true
+        - id: urgency
+          prompt: "How urgent is this?"
+          answer_type: choice
+          options:
+            - Low
+            - Medium
+            - High
     routing:
-      branches:
-        - condition: "{{output.category}} == 'billing'"
-          next: billing-flow
-        - condition: "{{output.category}} == 'technical'"
-          next: tech-flow
-        - condition: default
-          next: general-flow
+      - to: process
 ```
 
-### Node with State
+### Node with MCP Tool
+
+Execute MCP tools with `mcp.exec`:
 
 ```yaml
 nodes:
-  remember-name:
-    component.template:
-      config:
-        template: "Hello {{message.text}}"
-    state:
-      set:
-        user_name: "{{message.text}}"
+  call_api:
+    mcp.exec:
+      component: weather_api
+      action: forecast_weather
+      args:
+        q: collect_info.location
+        days: 3
     routing:
-      next: greet
+      - to: format_response
+```
 
-  greet:
-    component.template:
-      config:
-        template: "Nice to meet you, {{state.user_name}}!"
+### Node with Template
+
+Render dynamic content with `templating.handlebars`:
+
+```yaml
+nodes:
+  respond:
+    templating.handlebars:
+      text: |
+        Weather for {{call_api.payload.location.name}}:
+        Temperature: {{call_api.payload.current.temp_c}}°C
+        Condition: {{call_api.payload.current.condition.text}}
+    routing:
+      - out: true
 ```
 
 ## Routing
@@ -151,229 +179,270 @@ Routing determines which node executes next.
 ### Simple Routing
 
 ```yaml
+# Route to another node
 routing:
-  next: next-node
+  - to: next_node
+
+# Terminal - end the flow
+routing:
+  - out: true
+
+# Shorthand terminal
+routing: out
+```
+
+### Multiple Routes (Fan-out)
+
+```yaml
+routing:
+  - to: handler_a
+  - to: handler_b
+```
+
+### Reply and Continue
+
+```yaml
+routing:
+  - reply: true
+  - to: next_node
 ```
 
 ### Conditional Routing
 
-```yaml
-routing:
-  branches:
-    - condition: "{{output.score}} > 0.8"
-      next: high-confidence
-    - condition: "{{output.score}} > 0.5"
-      next: medium-confidence
-    - condition: default
-      next: low-confidence
-```
-
-### Loop Back
-
-```yaml
-routing:
-  next: same-node  # Loops back to this node
-```
-
-### End Flow
-
-```yaml
-routing:
-  next: __end__  # Terminates the flow
-```
-
-## State Management
-
-Flows can read and write state that persists across nodes.
-
-### Setting State
+Use `when` on target nodes:
 
 ```yaml
 nodes:
-  collect:
-    component.qa-process:
-      config:
-        questions:
-          - What's your name?
-          - What's your email?
-    state:
-      set:
-        name: "{{output.answers[0]}}"
-        email: "{{output.answers[1]}}"
-```
-
-### Reading State
-
-```yaml
-nodes:
-  summarise:
-    component.template:
-      config:
-        template: |
-          Summary for {{state.name}}:
-          Email: {{state.email}}
-```
-
-### Clearing State
-
-```yaml
-state:
-  clear:
-    - temporary_data
-```
-
-## Templating
-
-Flows use a Handlebars-like templating syntax:
-
-### Variables
-
-```yaml
-# Access message
-"{{message.text}}"
-"{{message.channel}}"
-
-# Access state
-"{{state.user_name}}"
-
-# Access output from previous component
-"{{output.result}}"
-
-# Access config
-"{{config.setting}}"
-```
-
-### Conditions
-
-```yaml
-condition: "{{output.score}} > 0.5"
-condition: "{{state.attempts}} < 3"
-condition: "{{message.channel}} == 'teams'"
-```
-
-### Built-in Helpers
-
-```yaml
-# String manipulation
-"{{uppercase state.name}}"
-"{{lowercase message.text}}"
-
-# Date/time
-"{{now}}"
-"{{format_date output.timestamp}}"
-
-# JSON
-"{{json output}}"
-```
-
-## QA Processing
-
-The `qa.process` component collects structured information:
-
-```yaml
-nodes:
-  collect-info:
-    component.qa-process:
-      config:
-        questions:
-          - id: issue
-            text: What seems to be the problem?
-            required: true
-          - id: urgency
-            text: How urgent is this?
-            type: choice
-            options:
-              - Low
-              - Medium
-              - High
+  classify:
+    mcp.exec:
+      component: classifier
+      action: classify
+      args:
+        text: "{{in.text}}"
     routing:
-      next: process
+      - to: high_priority
+      - to: normal_priority
+
+  high_priority:
+    when:
+      expression: "{{classify.priority}} == 'high'"
+    templating.handlebars:
+      text: "Urgent! Processing immediately."
+    routing: out
+
+  normal_priority:
+    when:
+      expression: "{{classify.priority}} != 'high'"
+    templating.handlebars:
+      text: "Added to queue."
+    routing: out
 ```
 
-## Full Example
+## Parameters
+
+Flow-level parameters are accessible throughout the flow:
+
+```yaml
+parameters:
+  model: gpt-4o
+  max_tokens: 1000
+  api_timeout: 30
+
+nodes:
+  call_llm:
+    mcp.exec:
+      component: llm
+      action: chat
+      args:
+        model: parameters.model
+        max_tokens: parameters.max_tokens
+```
+
+## Data References
+
+Reference data from previous nodes using dot notation:
+
+### Previous Node Output
+
+```yaml
+# Reference output from 'collect_info' node
+text: "Hello {{collect_info.name}}!"
+location: collect_info.q_location
+```
+
+### Nested Properties
+
+```yaml
+# Access nested data
+city: "{{api_call.payload.location.name}}"
+temp: "{{api_call.payload.current.temp_c}}"
+```
+
+### Handlebars Iteration
+
+```yaml
+templating.handlebars:
+  text: |
+    Results:
+    {{#api_call.payload.items}}
+    - {{name}}: {{value}}
+    {{/api_call.payload.items}}
+```
+
+### Parameters
+
+```yaml
+# Reference flow parameters
+days: parameters.days_default
+```
+
+## Complete Example
 
 Here's a complete IT support flow:
 
 ```yaml
 id: it-support
 type: messaging
-description: IT support assistant with LLM classification
-version: 1.0.0
-start: collect-info
+title: IT Support Assistant
+description: Intelligent IT support with classification and routing
+start: greet
+
+parameters:
+  escalation_timeout: 30
 
 nodes:
-  collect-info:
-    component.qa-process:
-      config:
-        questions:
-          - id: issue
-            text: Please describe your IT issue
-            required: true
+  greet:
+    templating.handlebars:
+      text: |
+        Welcome to IT Support!
+        I can help with password resets, hardware issues, and software problems.
+        Please describe your issue.
     routing:
-      next: classify
+      - to: collect_info
+
+  collect_info:
+    qa.process:
+      questions:
+        - id: issue_description
+          prompt: "Please describe your issue in detail:"
+          answer_type: text
+          required: true
+        - id: urgency
+          prompt: "How urgent is this?"
+          answer_type: choice
+          options:
+            - Low - Can wait a few days
+            - Medium - Need help today
+            - High - Blocking my work
+    routing:
+      - to: classify
 
   classify:
-    component.llm-openai:
-      config:
+    mcp.exec:
+      component: llm
+      action: chat
+      args:
         model: gpt-4o
+        temperature: 0
         system: |
-          Classify this IT support request into one of:
-          - password: Password reset or login issues
-          - hardware: Physical equipment problems
-          - software: Application issues
-          - network: Connectivity problems
-          - other: Anything else
-
-          Respond with just the category name.
+          Classify this IT issue into: password, hardware, software, network, or other.
+          Respond with ONLY the category name.
+        user: "Issue: {{in.issue_description}}"
     routing:
-      branches:
-        - condition: "{{output.text}} == 'password'"
-          next: password-reset
-        - condition: "{{output.text}} == 'hardware'"
-          next: hardware-ticket
-        - condition: default
-          next: general-support
+      - to: password_handler
+      - to: hardware_handler
+      - to: general_handler
 
-  password-reset:
-    component.adaptive-card:
-      config:
-        template: password-reset-card
-    routing:
-      next: __end__
+  password_handler:
+    when:
+      expression: "{{classify.payload.text}} == 'password'"
+    templating.handlebars:
+      text: |
+        I can help you reset your password.
+        Please visit: https://password.company.com/reset
 
-  hardware-ticket:
-    component.template:
-      config:
-        template: |
-          I'll create a hardware support ticket for you.
-          A technician will contact you within 24 hours.
-    routing:
-      next: __end__
+        If you need further assistance, reply with "help".
+    routing: out
 
-  general-support:
-    component.llm-openai:
-      config:
+  hardware_handler:
+    when:
+      expression: "{{classify.payload.text}} == 'hardware'"
+    templating.handlebars:
+      text: |
+        I'll create a hardware support ticket for you.
+
+        Issue: {{in.issue_description}}
+        Urgency: {{in.urgency}}
+
+        A technician will contact you within 24 hours.
+    routing: out
+
+  general_handler:
+    when:
+      expression: "{{classify.payload.text}} != 'password' && {{classify.payload.text}} != 'hardware'"
+    mcp.exec:
+      component: llm
+      action: chat
+      args:
         model: gpt-4o
-        system: You are a helpful IT support assistant
+        system: You are a helpful IT support assistant. Be concise but thorough.
+        user: "Please help with: {{in.issue_description}}"
     routing:
-      next: __end__
+      - to: respond
+
+  respond:
+    templating.handlebars:
+      text: "{{general_handler.payload.text}}"
+    routing: out
 ```
+
+## Sidecar Files
+
+YGTc v2 flows use a **sidecar file** (`<flow>.ygtc.resolve.json`) to track which components back each node. This separates flow logic from component sources:
+
+```json
+{
+  "schema_version": 1,
+  "nodes": {
+    "collect_info": {
+      "source": {
+        "kind": "remote",
+        "reference": "oci://ghcr.io/greentic-ai/components/qa:0.1.0"
+      }
+    },
+    "classify": {
+      "source": {
+        "kind": "local",
+        "path": "components/llm/target/wasm32-wasip2/release/llm.wasm"
+      }
+    }
+  }
+}
+```
+
+The sidecar is managed by `greentic-flow` CLI commands (`add-step`, `bind-component`, `doctor`).
 
 ## Validation
 
 Always validate flows before deployment:
 
 ```bash
-greentic-dev flow validate -f my-flow.ygtc --json
+# Validate a single flow
+greentic-flow doctor flows/my-flow.ygtc
+
+# Validate all flows in a directory
+greentic-flow doctor flows/
+
+# JSON output for CI
+greentic-flow doctor --json flows/my-flow.ygtc
 ```
 
 This checks:
-
 - Valid YAML syntax
 - Required fields present
 - Node references exist
-- Routing conditions valid
-- Component references valid
+- Routing targets valid
+- Component bindings in sidecar
 
 ## Best Practices
 
@@ -381,9 +450,9 @@ This checks:
 
 ```yaml
 # Good
-collect-issue:
-classify-request:
-send-response:
+collect_issue:
+classify_request:
+send_response:
 
 # Bad
 node1:
@@ -397,14 +466,19 @@ One flow, one purpose. Compose flows rather than creating monolithic ones.
 
 ### Handle All Branches
 
-Always have a `default` condition to catch unexpected cases.
+Always have fallback routes for unexpected cases.
+
+### Use Parameters
+
+Extract configurable values to `parameters:` for easy adjustment.
 
 ### Version Your Flows
 
-Include version metadata for tracking changes.
+Include title and description for tracking changes.
 
 ## Next Steps
 
 - **[Packs](/docs/architecture/packs)** — Bundling flows for distribution
 - **[YGTC Schema Reference](/docs/reference/ygtc-schema)** — Full schema documentation
+- **[CLI Reference](/docs/reference/cli)** — Flow CLI commands
 - **[Tutorial: IT Support Bot](/tutorials/demo-2-it-support)** — Step-by-step flow building

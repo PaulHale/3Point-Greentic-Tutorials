@@ -1,6 +1,6 @@
 ---
 title: "Demo 1: Hello World Echo Bot"
-description: Learn the basics of YGTC flows by building a simple echo bot that repeats what you say.
+description: Learn the basics of YGTc v2 flows by building a simple echo bot that repeats what you say.
 difficulty: beginner
 duration: "15 minutes"
 prerequisites:
@@ -17,10 +17,10 @@ import Callout from '@/components/ui/Callout.astro';
 
 In this tutorial, you'll learn the fundamentals of Greentic flows by building a simple bot that echoes back your messages. Along the way, you'll understand:
 
-- How flows are structured
-- How nodes invoke components
+- How YGTc v2 flows are structured
+- How nodes invoke operations
 - How routing connects nodes
-- How to test flows locally
+- How to validate and test flows locally
 
 ## Prerequisites
 
@@ -29,8 +29,8 @@ Make sure you have Greentic installed:
 <Terminal
   client:visible
   lines={[
-    { type: 'command', content: 'greentic-dev --version' },
-    { type: 'output', content: 'greentic-dev 0.1.0' },
+    { type: 'command', content: 'greentic-flow --version' },
+    { type: 'output', content: 'greentic-flow 0.2.0' },
   ]}
 />
 
@@ -44,30 +44,40 @@ Start by creating a directory for your first project:
   client:visible
   lines={[
     { type: 'command', content: 'mkdir hello-world && cd hello-world' },
+    { type: 'command', content: 'mkdir flows' },
   ]}
 />
 
 ## Write Your First Flow
 
-Create a file called `echo.ygtc` with this content:
+Create a new flow file using the CLI:
+
+<Terminal
+  client:visible
+  lines={[
+    { type: 'command', content: 'greentic-flow new --flow flows/echo.ygtc --id echo-flow --type messaging --name "Echo Bot"' },
+    { type: 'success', content: "✓ Created flows/echo.ygtc" },
+  ]}
+/>
+
+Now edit `flows/echo.ygtc` to add a simple echo node:
 
 <CodeBlock
   client:visible
-  filename="echo.ygtc"
+  filename="flows/echo.ygtc"
   language="yaml"
-  code={`# My first Greentic flow
-id: echo-flow
-type: messaging
+  code={`id: echo-flow
+title: Echo Bot
 description: A simple echo bot
+type: messaging
 start: echo
 
 nodes:
   echo:
-    component.template:
-      config:
-        template: "You said: {{message.text}}"
+    templating.handlebars:
+      text: "You said: {{in.text}}"
     routing:
-      next: __end__`}
+      - out: true`}
 />
 
 Let's break down what each part means:
@@ -76,8 +86,8 @@ Let's break down what each part means:
 
 ```yaml
 id: echo-flow        # Unique identifier for this flow
+title: Echo Bot      # Human-readable title
 type: messaging      # Triggered by incoming messages
-description: ...     # Human-readable description
 start: echo          # Which node to run first
 ```
 
@@ -85,21 +95,20 @@ start: echo          # Which node to run first
 
 ```yaml
 nodes:
-  echo:              # Node name (used for routing)
-    component.template:    # Component to invoke
-      config:              # Component configuration
-        template: "..."
+  echo:                        # Node name (used for routing)
+    templating.handlebars:     # Operation key
+      text: "..."              # Config directly under operation
 ```
 
 ### Routing
 
 ```yaml
 routing:
-  next: __end__      # Special value that ends the flow
+  - out: true        # Terminal - ends the flow
 ```
 
 <Callout type="tip" title="Template Syntax">
-  The `{{message.text}}` syntax is Handlebars-style templating. It inserts the user's message text into the response.
+  The `{{in.text}}` syntax is Handlebars templating. The `in.` prefix accesses flow input — here, `in.text` is the user's message text.
 </Callout>
 
 ## Validate Your Flow
@@ -109,7 +118,7 @@ Before running, check that your flow is valid:
 <Terminal
   client:visible
   lines={[
-    { type: 'command', content: 'greentic-dev flow validate -f echo.ygtc' },
+    { type: 'command', content: 'greentic-flow doctor flows/echo.ygtc' },
     { type: 'success', content: "✓ Flow 'echo-flow' is valid" },
     { type: 'output', content: '  Type: messaging' },
     { type: 'output', content: '  Nodes: 1' },
@@ -117,14 +126,16 @@ Before running, check that your flow is valid:
   ]}
 />
 
-## Run Locally
+## Build and Run Locally
 
-Start the development server to test your flow:
+Build a pack from your flow and run it:
 
 <Terminal
   client:visible
   lines={[
-    { type: 'command', content: 'greentic-dev flow run -f echo.ygtc' },
+    { type: 'command', content: 'greentic-pack build --in . --gtpack-out dist/echo.gtpack' },
+    { type: 'success', content: '✓ Pack built: dist/echo.gtpack' },
+    { type: 'command', content: 'greentic-dev pack run --pack dist/echo.gtpack' },
     { type: 'output', content: 'Greentic Dev Server' },
     { type: 'output', content: 'Flow: echo-flow' },
     { type: 'output', content: 'Type: messaging' },
@@ -138,32 +149,51 @@ Try different messages and watch the bot echo them back!
 
 ## Add a Greeting Step
 
-Let's make it more interactive by adding a greeting. Update your flow:
+Let's make it more interactive by adding a greeting. First, add a step using the CLI:
+
+<Terminal
+  client:visible
+  lines={[
+    { type: 'command', content: 'greentic-flow add-step --flow flows/echo.ygtc --node-id greet --operation templating.handlebars --payload \'{"text":"Hello! I\\'m an echo bot. Tell me something!"}\' --routing-next echo' },
+    { type: 'success', content: "✓ Added node 'greet'" },
+  ]}
+/>
+
+Update the flow to start at the new greeting node:
+
+<Terminal
+  client:visible
+  lines={[
+    { type: 'command', content: 'greentic-flow update --flow flows/echo.ygtc --start greet' },
+    { type: 'success', content: "✓ Updated flow metadata" },
+  ]}
+/>
+
+Your flow now looks like:
 
 <CodeBlock
   client:visible
-  filename="echo.ygtc"
+  filename="flows/echo.ygtc"
   language="yaml"
-  highlightLines={[6, 8, 9, 10, 11, 12, 13, 14]}
+  highlightLines={[5, 8, 9, 10, 11, 12]}
   code={`id: echo-flow
-type: messaging
+title: Echo Bot
 description: A greeting echo bot
+type: messaging
 start: greet
 
 nodes:
   greet:
-    component.template:
-      config:
-        template: "Hello! I'm an echo bot. Tell me something!"
+    templating.handlebars:
+      text: "Hello! I'm an echo bot. Tell me something!"
     routing:
-      next: echo
+      - to: echo
 
   echo:
-    component.template:
-      config:
-        template: "You said: {{message.text}}"
+    templating.handlebars:
+      text: "You said: {{in.text}}"
     routing:
-      next: echo`}
+      - to: echo`}
 />
 
 Now the flow:
@@ -175,17 +205,19 @@ Now the flow:
 5. **Loops** back to `echo` for the next message
 
 <Callout type="info" title="Notice the Loop">
-  The `echo` node routes to itself (`next: echo`), creating a loop that keeps echoing until you stop the server.
+  The `echo` node routes to itself (`- to: echo`), creating a loop that keeps echoing until you stop the server.
 </Callout>
 
 ## Test the Updated Flow
 
-Run again to see the conversation flow:
+Validate and run again:
 
 <Terminal
   client:visible
   lines={[
-    { type: 'command', content: 'greentic-dev flow run -f echo.ygtc' },
+    { type: 'command', content: 'greentic-flow doctor flows/echo.ygtc' },
+    { type: 'success', content: "✓ Flow 'echo-flow' is valid" },
+    { type: 'command', content: 'greentic-pack build --in . --gtpack-out dist/echo.gtpack && greentic-dev pack run --pack dist/echo.gtpack' },
     { type: 'output', content: 'Greentic Dev Server' },
     { type: 'success', content: "Hello! I'm an echo bot. Tell me something!", delay: 500 },
     { type: 'command', content: 'Testing 123', delay: 1000 },
@@ -195,57 +227,57 @@ Run again to see the conversation flow:
   ]}
 />
 
-## Add State
+## Add Q&A to Remember Names
 
-Let's remember the user's name. Update the flow:
+Let's use the `qa.process` operation to collect the user's name:
 
 <CodeBlock
   client:visible
-  filename="echo.ygtc"
+  filename="flows/echo.ygtc"
   language="yaml"
   code={`id: echo-flow
-type: messaging
+title: Echo Bot
 description: Echo bot that remembers your name
-start: ask-name
+type: messaging
+start: ask_name
 
 nodes:
-  ask-name:
-    component.template:
-      config:
-        template: "Hi! What's your name?"
+  ask_name:
+    qa.process:
+      welcome: "Hi! What's your name?"
+      questions:
+        - id: user_name
+          prompt: "Please enter your name:"
+          answer_type: text
     routing:
-      next: save-name
+      - to: greet_user
 
-  save-name:
-    component.template:
-      config:
-        template: "Nice to meet you, {{message.text}}!"
-    state:
-      set:
-        user_name: "{{message.text}}"
+  greet_user:
+    templating.handlebars:
+      text: "Nice to meet you, {{in.user_name}}!"
     routing:
-      next: echo
+      - to: echo
 
   echo:
-    component.template:
-      config:
-        template: "{{state.user_name}}, you said: {{message.text}}"
+    templating.handlebars:
+      text: "{{in.user_name}}, you said: {{in.text}}"
     routing:
-      next: echo`}
+      - to: echo`}
 />
 
 Key changes:
 
-- **`state.set`** — Saves `message.text` to a variable called `user_name`
-- **`{{state.user_name}}`** — Retrieves the saved name in the template
+- **`qa.process`** — Collects structured Q&A responses
+- **`{{in.user_name}}`** — References the Q&A answer via `in.` prefix (the question id)
 
 Test it:
 
 <Terminal
   client:visible
   lines={[
-    { type: 'command', content: 'greentic-dev flow run -f echo.ygtc' },
+    { type: 'command', content: 'greentic-flow doctor flows/echo.ygtc && greentic-pack build --in . --gtpack-out dist/echo.gtpack && greentic-dev pack run --pack dist/echo.gtpack' },
     { type: 'success', content: "Hi! What's your name?", delay: 500 },
+    { type: 'output', content: 'Please enter your name:', delay: 500 },
     { type: 'command', content: 'Claude', delay: 1000 },
     { type: 'success', content: 'Nice to meet you, Claude!' },
     { type: 'command', content: 'Hello there', delay: 1000 },
@@ -253,32 +285,30 @@ Test it:
   ]}
 />
 
-## Build a Pack
+## Understanding Sidecar Files
 
-When you're ready to share or deploy your flow, build it into a pack:
+When you use `greentic-flow add-step` with component references, a sidecar file is created:
 
-<Terminal
-  client:visible
-  lines={[
-    { type: 'command', content: 'greentic-dev pack build -f echo.ygtc -o dist/echo.gtpack' },
-    { type: 'output', content: 'Building pack...' },
-    { type: 'output', content: '  Flow: echo-flow' },
-    { type: 'output', content: '  Components: 1' },
-    { type: 'success', content: '✓ Pack built: dist/echo.gtpack' },
-  ]}
-/>
+```
+flows/
+├── echo.ygtc
+└── echo.ygtc.resolve.json    # Tracks component bindings
+```
+
+The sidecar maps nodes to their backing components. You don't need to edit it manually — the CLI manages it for you.
 
 ## What You Learned
 
 Congratulations! You've learned:
 
-- ✅ Basic flow structure (id, type, start, nodes)
-- ✅ How nodes invoke components with config
-- ✅ Simple routing between nodes
+- ✅ YGTc v2 flow structure (id, type, start, nodes)
+- ✅ How nodes use operation keys like `templating.handlebars` and `qa.process`
+- ✅ Config goes directly under the operation (no `config:` wrapper)
+- ✅ Array routing with `- to:` and `- out: true`
 - ✅ Looping flows (node routes to itself)
-- ✅ State management (saving and reading values)
-- ✅ Template syntax for dynamic content
-- ✅ Building flows into packs
+- ✅ Referencing input and Q&A answers with `{{in.field}}`
+- ✅ Validating flows with `greentic-flow doctor`
+- ✅ Building and running packs locally
 
 ## Next Steps
 
@@ -286,4 +316,4 @@ Ready for more? Continue to:
 
 - **[Demo 2: IT Support Bot](/tutorials/demo-2-it-support)** — Add LLM intelligence and conditional routing
 - **[Flows Documentation](/docs/architecture/flows)** — Deep dive into flow syntax
-- **[Components Documentation](/docs/architecture/components)** — Learn about available components
+- **[YGTC Schema Reference](/docs/reference/ygtc-schema)** — Complete schema documentation

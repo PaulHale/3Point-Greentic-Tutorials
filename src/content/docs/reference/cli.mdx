@@ -1,425 +1,368 @@
 ---
 title: "CLI Reference"
-description: "Complete reference for the greentic-dev command-line interface"
+description: "Complete reference for the Greentic command-line tools"
 ---
 
 # CLI Reference
 
-The `greentic-dev` CLI is your primary tool for developing, testing, and deploying Greentic flows and components.
+Greentic provides several CLI tools for developing, testing, and deploying flows and components. The main tools are:
 
-## Installation
+- **`greentic-flow`** — Flow authoring, validation, and component binding
+- **`greentic-component`** — Component scaffolding, building, and testing
+- **`greentic-pack`** — Pack building and deployment
+- **`greentic-dev`** — Local development server and pack runner
 
-```bash
-# Using cargo
-cargo install greentic-dev
+## greentic-flow
 
-# Or download binary from releases
-curl -fsSL https://get.greentic.ai | sh
-```
+The flow CLI edits YGTc v2 flows in-place and maintains a resolve sidecar (`<flow>.ygtc.resolve.json`) that tracks component bindings.
 
-## Global Options
+### new
 
-```bash
-greentic-dev [OPTIONS] <COMMAND>
-
-Options:
-  -v, --verbose      Enable verbose output
-  -q, --quiet        Suppress non-error output
-  --config <PATH>    Path to config file [default: ~/.greentic/config.toml]
-  --tenant <ID>      Tenant ID for multi-tenant operations
-  -h, --help         Print help
-  -V, --version      Print version
-```
-
-## Commands
-
-### flow
-
-Manage YGTC flow files.
-
-#### flow validate
-
-Validate a flow file:
+Create a minimal v2 flow file:
 
 ```bash
-greentic-dev flow validate [OPTIONS] -f <FILE>
-
-Options:
-  -f, --file <FILE>     Flow file to validate
-  --json                Output as JSON
-  --strict              Enable strict validation
-  --schema <URL>        Custom schema URL
-
-Examples:
-  greentic-dev flow validate -f my-flow.ygtc
-  greentic-dev flow validate -f my-flow.ygtc --json
+greentic-flow new --flow flows/main.ygtc --id main --type messaging \
+  [--schema-version 2] [--name "Title"] [--description "text"] [--force]
 ```
 
-#### flow lint
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--flow <PATH>` | Path to the flow file to create |
+| `--id <ID>` | Unique identifier for the flow |
+| `--type <TYPE>` | Flow type: `messaging`, `webhook`, `timer`, `websocket`, `pubsub` |
+| `--schema-version <N>` | Schema version (default: 2) |
+| `--name <TITLE>` | Human-readable title |
+| `--description <TEXT>` | Flow description |
+| `--force` | Overwrite existing file |
 
-Lint a flow file for best practices:
+**Example:**
+```bash
+greentic-flow new --flow flows/support.ygtc --id support-bot --type messaging \
+  --name "Support Bot" --description "IT support assistant"
+```
+
+### update
+
+Non-destructive metadata edits (name, description, tags, id, type, schema_version):
 
 ```bash
-greentic-dev flow lint [OPTIONS] -f <FILE>
-
-Options:
-  -f, --file <FILE>     Flow file to lint
-  --fix                 Auto-fix issues where possible
-  --rules <RULES>       Comma-separated rules to enable
-
-Examples:
-  greentic-dev flow lint -f my-flow.ygtc
-  greentic-dev flow lint -f my-flow.ygtc --fix
+greentic-flow update --flow flows/main.ygtc --name "New Title" --tags foo,bar
 ```
 
-#### flow run
+Preserves nodes and entrypoints. Changing `--type` is only allowed on empty flows. Fails if the file is missing.
 
-Run a flow locally:
+### add-step
+
+Insert a component-backed node and keep the sidecar in sync. Always writes v2 YAML.
+
+**Local component (Wasm file):**
+```bash
+greentic-flow add-step --flow flows/main.ygtc \
+  --node-id hello-world \
+  --operation handle_message \
+  --payload '{"input":"hi"}' \
+  --local-wasm components/hello-world/target/wasm32-wasip2/release/hello_world.wasm
+```
+
+**Remote component (OCI registry):**
+```bash
+greentic-flow add-step --flow flows/main.ygtc \
+  --node-id templates \
+  --operation handle_message \
+  --payload '{"input":"hi"}' \
+  --component oci://ghcr.io/greentic-ai/components/templates:0.1.2 --pin
+```
+
+**Config mode (uses dev_flows for schema-valid payloads):**
+```bash
+greentic-flow add-step --flow flows/main.ygtc --mode config \
+  --node-id hello-world \
+  --component oci://ghcr.io/greentic-ai/components/hello-world:latest --pin \
+  --after start
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--flow <PATH>` | Flow file to modify |
+| `--node-id <ID>` | ID for the new node |
+| `--operation <OP>` | Operation key (e.g., `handle_message`, `qa.process`) |
+| `--payload <JSON>` | Operation payload as JSON |
+| `--local-wasm <PATH>` | Path to local Wasm file |
+| `--component <REF>` | Remote component reference (`oci://`, `repo://`, `store://`) |
+| `--pin` | Hash local Wasm or resolve remote tag to digest |
+| `--after <NODE>` | Insert after this node |
+| `--mode <MODE>` | `default` or `config` (uses dev_flows) |
+| `--answers <JSON>` | JSON object of answers for config mode questions |
+| `--answers-file <PATH>` | File containing answers JSON |
+| `--dry-run` | Print updated flow without writing |
+| `--validate-only` | Plan/validate without changing files |
+
+**Routing flags:**
+| Flag | Description |
+|------|-------------|
+| `--routing-out` | Make the new node terminal (`routing: out`) |
+| `--routing-reply` | Reply to origin (`routing: reply`) |
+| `--routing-next <NODE>` | Route to a specific node |
+| `--routing-multi-to a,b` | Fan out to multiple nodes |
+| `--routing-json <FILE>` | Complex routing from JSON file |
+
+### update-step
+
+Re-materialise an existing node using its sidecar binding:
 
 ```bash
-greentic-dev flow run [OPTIONS] -f <FILE>
-
-Options:
-  -f, --file <FILE>     Flow file to run
-  --mocks <MODE>        Mock mode: on, off, record [default: on]
-  --input <JSON>        Initial input message as JSON
-  --interactive         Enable interactive mode
-  --port <PORT>         WebChat port [default: 3000]
-
-Examples:
-  greentic-dev flow run -f support.ygtc --interactive
-  greentic-dev flow run -f echo.ygtc --input '{"text": "hello"}'
+greentic-flow update-step --flow flows/main.ygtc --step hello \
+  --answers '{"input":"hi again"}' --routing-reply
 ```
 
-### component
+Prefills with current payload, merges answers, and preserves routing unless overridden. Requires a sidecar entry for the node.
 
-Manage Wasm components.
+### delete-step
 
-#### component new
+Remove a node and optionally splice predecessors to its routing:
+
+```bash
+greentic-flow delete-step --flow flows/main.ygtc --step mid \
+  [--strategy splice|remove-only] \
+  [--if-multiple-predecessors error|splice-all] \
+  [--assume-yes] [--write]
+```
+
+Default `splice` rewires predecessors to the deleted node's routes. Also removes the sidecar entry.
+
+### bind-component
+
+Attach or repair a sidecar mapping without changing flow content:
+
+```bash
+greentic-flow bind-component --flow flows/main.ygtc --step hello \
+  --local-wasm components/hello-world/target/wasm32-wasip2/release/hello_world.wasm \
+  [--pin] [--write]
+```
+
+Use when a node exists but its sidecar entry is missing or incorrect.
+
+### doctor
+
+Validate flows against the embedded schema and optional adapter registry:
+
+```bash
+# Validate all flows in a directory
+greentic-flow doctor flows/
+
+# Validate a single flow with JSON output
+greentic-flow doctor --json --stdin < flows/main.ygtc
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--json` | Machine-readable report for one flow |
+| `--registry` | Enable adapter_resolvable linting |
+
+The doctor command also:
+- Updates `*.ygtc.resolve.json` to drop stale node bindings
+- Validates node payloads against component `config_schema` when available
+
+### answers
+
+Emit JSON Schema and example answers for a component operation:
+
+```bash
+greentic-flow answers --component <oci|path> --operation <op> \
+  --name <prefix> [--out-dir <dir>] [--mode default|config]
+```
+
+Writes `<prefix>.schema.json` and `<prefix>.example.json`.
+
+### doctor-answers
+
+Validate answers JSON against a schema:
+
+```bash
+greentic-flow doctor-answers --schema answers.schema.json --answers answers.json [--json]
+```
+
+Exits 0 when valid, exits 1 with validation errors.
+
+---
+
+## greentic-component
+
+Manage WebAssembly components.
+
+### new
 
 Scaffold a new component:
 
 ```bash
-greentic-dev component new [OPTIONS] <NAME>
-
-Options:
-  --org <ORG>           Organisation namespace [default: local]
-  --template <TPL>      Template: basic, llm, http, script
-  --path <PATH>         Output directory [default: .]
-
-Examples:
-  greentic-dev component new my-component --org ai.greentic
-  greentic-dev component new llm-classifier --template llm
+greentic-component new --name my-component --org ai.greentic --path ./components
 ```
 
-#### component build
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--name <NAME>` | Component name |
+| `--org <ORG>` | Organisation namespace |
+| `--path <PATH>` | Output directory |
+| `--template <TPL>` | Template: `basic`, `llm`, `http`, `script` |
 
-Build a component:
+### build
+
+Build a component to WebAssembly:
 
 ```bash
-greentic-dev component build [OPTIONS]
-
-Options:
-  --path <PATH>         Component directory [default: .]
-  --release             Build in release mode
-  --target <TARGET>     Target [default: wasm32-wasip2]
-
-Examples:
-  greentic-dev component build --release
+# In the component directory
+cargo build --target wasm32-wasip2 --release
 ```
 
-#### component validate
+### validate
 
-Validate a component:
+Validate a component structure and manifest:
 
 ```bash
-greentic-dev component validate [OPTIONS]
-
-Options:
-  --path <PATH>         Component directory [default: .]
-  --manifest <FILE>     Manifest file [default: component.manifest.json]
-
-Examples:
-  greentic-dev component validate --path ./my-component
+greentic-component validate --path ./my-component
 ```
 
-#### component test
+### test
 
-Test a component:
+Run component tests:
 
 ```bash
-greentic-dev component test [OPTIONS]
-
-Options:
-  --path <PATH>         Component directory [default: .]
-  --filter <PATTERN>    Test filter pattern
-
-Examples:
-  greentic-dev component test
-  greentic-dev component test --filter "test_handle_*"
+greentic-component test --path ./my-component [--filter "test_*"]
 ```
 
-### pack
+---
 
-Manage Greentic packs.
+## greentic-pack
 
-#### pack build
+Manage Greentic packs (signed bundles of flows and components).
+
+### build
 
 Build a pack from flows and components:
 
 ```bash
-greentic-dev pack build [OPTIONS]
-
-Options:
-  -f, --flow <FILES>    Flow files to include (can repeat)
-  -c, --component <DIR> Component directories (can repeat)
-  -o, --output <FILE>   Output pack file [default: dist/pack.gtpack]
-  --version <VER>       Pack version [default: 0.1.0]
-  --sign                Sign the pack
-  --key <FILE>          Signing key file
-
-Examples:
-  greentic-dev pack build -f flows/*.ygtc -o my-pack.gtpack
-  greentic-dev pack build -f main.ygtc -c ./components --sign
+greentic-pack build --in ./project --gtpack-out dist/my-pack.gtpack
 ```
 
-#### pack run
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--in <DIR>` | Source directory containing flows |
+| `--gtpack-out <FILE>` | Output pack file |
+| `--version <VER>` | Pack version |
+| `--sign` | Sign the pack |
+| `--key <FILE>` | Signing key file |
 
-Run a pack locally:
-
-```bash
-greentic-dev pack run [OPTIONS] -p <PACK>
-
-Options:
-  -p, --pack <FILE>     Pack file to run
-  --mocks <MODE>        Mock mode: on, off [default: on]
-  --port <PORT>         WebChat port [default: 3000]
-
-Examples:
-  greentic-dev pack run -p my-pack.gtpack
-  greentic-dev pack run -p my-pack.gtpack --mocks off
-```
-
-#### pack sign
-
-Sign a pack:
-
-```bash
-greentic-dev pack sign [OPTIONS] -p <PACK>
-
-Options:
-  -p, --pack <FILE>     Pack file to sign
-  --key <FILE>          Private key file
-  --cert <FILE>         Certificate file
-  -o, --output <FILE>   Output file [default: overwrite input]
-
-Examples:
-  greentic-dev pack sign -p my-pack.gtpack --key key.pem --cert cert.pem
-```
-
-#### pack verify
-
-Verify pack signature:
-
-```bash
-greentic-dev pack verify [OPTIONS] -p <PACK>
-
-Options:
-  -p, --pack <FILE>           Pack file to verify
-  --trusted-certs <DIR>       Directory of trusted certificates
-
-Examples:
-  greentic-dev pack verify -p my-pack.gtpack
-```
-
-#### pack inspect
+### inspect
 
 Inspect pack contents:
 
 ```bash
-greentic-dev pack inspect [OPTIONS] -p <PACK>
-
-Options:
-  -p, --pack <FILE>     Pack file to inspect
-  --json                Output as JSON
-  --extract <DIR>       Extract contents to directory
-
-Examples:
-  greentic-dev pack inspect -p my-pack.gtpack
-  greentic-dev pack inspect -p my-pack.gtpack --extract ./unpacked
+greentic-pack inspect --pack my-pack.gtpack [--json] [--extract <DIR>]
 ```
 
-### secrets
+### sign
 
-Manage secrets.
-
-#### secrets set
-
-Set a secret:
+Sign an existing pack:
 
 ```bash
-greentic-dev secrets set <NAME> [OPTIONS]
-
-Options:
-  --tenant <ID>         Tenant ID
-  --value <VALUE>       Secret value (prompts if not provided)
-  --file <FILE>         Read value from file
-
-Examples:
-  greentic-dev secrets set API_KEY --tenant acme-corp
-  greentic-dev secrets set CERT --file ./cert.pem
+greentic-pack sign --pack my-pack.gtpack --key key.pem --cert cert.pem
 ```
 
-#### secrets list
+### verify
 
-List secrets:
+Verify pack signature:
 
 ```bash
-greentic-dev secrets list [OPTIONS]
-
-Options:
-  --tenant <ID>         Tenant ID
-
-Examples:
-  greentic-dev secrets list --tenant acme-corp
+greentic-pack verify --pack my-pack.gtpack [--trusted-certs <DIR>]
 ```
 
-#### secrets delete
+---
 
-Delete a secret:
+## greentic-dev
+
+Local development server for testing flows and packs.
+
+### pack run
+
+Run a pack locally:
 
 ```bash
-greentic-dev secrets delete <NAME> [OPTIONS]
-
-Options:
-  --tenant <ID>         Tenant ID
-  --force               Skip confirmation
-
-Examples:
-  greentic-dev secrets delete API_KEY --tenant acme-corp
+greentic-dev pack run --pack dist/my-pack.gtpack [--mocks on|off]
 ```
 
-### deploy
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--pack <FILE>` | Pack file to run |
+| `--mocks <MODE>` | Mock mode: `on`, `off` (default: `on`) |
+| `--port <PORT>` | WebChat port (default: 3000) |
 
-Deploy packs.
+---
 
-#### deploy plan
+## Sidecar Files
 
-Generate deployment plan:
+When you use `greentic-flow` commands, a sidecar file (`<flow>.ygtc.resolve.json`) is maintained alongside your flow file. This tracks:
 
-```bash
-greentic-dev deploy plan [OPTIONS] -p <PACK>
+- **Node bindings** — Which component (local or remote) backs each node
+- **Digests** — Pinned hashes for reproducible builds
+- **Source references** — `file://` for local, `oci://` for remote
 
-Options:
-  -p, --pack <FILE>     Pack to deploy
-  --target <TARGET>     Target environment
-  --output <FILE>       Output plan file
-
-Examples:
-  greentic-dev deploy plan -p my-pack.gtpack --target production
+Example sidecar:
+```json
+{
+  "schema_version": 1,
+  "nodes": {
+    "hello-world": {
+      "source": {
+        "kind": "local",
+        "path": "components/hello-world/target/wasm32-wasip2/release/hello_world.wasm",
+        "digest": "sha256:abc123..."
+      }
+    },
+    "templates": {
+      "source": {
+        "kind": "remote",
+        "reference": "oci://ghcr.io/greentic-ai/components/templates:0.1.2",
+        "digest": "sha256:def456..."
+      }
+    }
+  }
+}
 ```
 
-#### deploy apply
-
-Apply deployment:
-
-```bash
-greentic-dev deploy apply [OPTIONS] <PLAN>
-
-Options:
-  --auto-approve        Skip confirmation
-  --dry-run             Show what would happen
-
-Examples:
-  greentic-dev deploy apply deploy-plan.json
-  greentic-dev deploy apply deploy-plan.json --dry-run
-```
-
-### config
-
-Manage configuration.
-
-#### config init
-
-Initialise configuration:
-
-```bash
-greentic-dev config init [OPTIONS]
-
-Options:
-  --force               Overwrite existing config
-
-Examples:
-  greentic-dev config init
-```
-
-#### config get
-
-Get configuration value:
-
-```bash
-greentic-dev config get <KEY>
-
-Examples:
-  greentic-dev config get default_tenant
-```
-
-#### config set
-
-Set configuration value:
-
-```bash
-greentic-dev config set <KEY> <VALUE>
-
-Examples:
-  greentic-dev config set default_tenant acme-corp
-```
-
-## Configuration File
-
-Location: `~/.greentic/config.toml`
-
-```toml
-[defaults]
-tenant = "acme-corp"
-output_format = "text"  # or "json"
-
-[api]
-url = "https://api.greentic.ai"
-timeout_seconds = 30
-
-[build]
-target = "wasm32-wasip2"
-release = true
-
-[signing]
-key_file = "~/.greentic/keys/signing.key"
-cert_file = "~/.greentic/keys/signing.crt"
-```
+---
 
 ## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
-| `GREENTIC_CONFIG` | Config file path |
-| `GREENTIC_TENANT` | Default tenant ID |
-| `GREENTIC_API_URL` | API base URL |
-| `GREENTIC_API_KEY` | API authentication key |
-| `RUST_LOG` | Log level (debug, info, warn, error) |
+| `GREENTIC_CONFIG` | Config file path (`~/.greentic/config.toml`) |
+| `RUST_LOG` | Log level (e.g., `greentic_flow=info`) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Telemetry endpoint |
 
-## Exit Codes
+---
 
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 1 | General error |
-| 2 | Invalid arguments |
-| 3 | Validation error |
-| 4 | Build error |
-| 5 | Runtime error |
+## CI Usage
+
+Run validation in CI pipelines:
+
+```bash
+# Format, lint, and test
+cargo fmt && cargo clippy --all-targets -- -D warnings && cargo test
+
+# Validate all flows
+greentic-flow doctor flows/
+```
+
+---
 
 ## Related
 
-- [Quickstart](/docs/getting-started/quickstart) - Getting started guide
-- [YGTC Schema](/docs/reference/ygtc-schema) - Flow file specification
-- [Component Manifest](/docs/reference/component-manifest) - Component specification
+- [Quickstart](/docs/getting-started/quickstart) — Getting started guide
+- [YGTC Schema](/docs/reference/ygtc-schema) — Flow file specification
+- [Component Manifest](/docs/reference/component-manifest) — Component specification

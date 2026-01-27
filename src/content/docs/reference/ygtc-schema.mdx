@@ -1,48 +1,58 @@
 ---
 title: "YGTC Schema"
-description: "Complete specification for YGTC flow files"
+description: "Complete specification for YGTc v2 flow files"
 ---
 
 # YGTC Schema
 
-YGTC (YAML Greentic Configuration) is the declarative format for defining flows in Greentic.
+YGTC (YAML Greentic Configuration) is the declarative format for defining flows in Greentic. This reference covers the **v2 schema** which is the current standard.
 
 ## Overview
 
 A YGTC file defines:
-- Flow metadata (id, type, description)
-- Nodes that execute components
+- Flow metadata (id, type, title, description)
+- Parameters for flow-level configuration
+- Nodes that execute operations
 - Routing between nodes
-- State management
-- MCP configuration
 
 ## Basic Structure
 
 ```yaml
-# Flow metadata
-id: my-flow
+id: weather-bot
+title: Weather Bot
+description: Ask for a location and get a weather forecast
 type: messaging
-description: A sample flow
-version: "1.0.0"
-start: entry-node
+start: collect_location
 
-# Optional MCP configuration
-mcp:
-  enabled: true
-  tools: []
+parameters:
+  days_default: 3
 
-# Node definitions
 nodes:
-  entry-node:
-    component.name:
-      config:
-        key: value
+  collect_location:
+    qa.process:
+      welcome: "Hi there! Let's get your weather forecast."
+      questions:
+        - id: q_location
+          prompt: "Which city do you want to check?"
+          answer_type: text
     routing:
-      next: exit-node
+      - to: forecast
 
-  exit-node:
-    component.other:
-      config: {}
+  forecast:
+    mcp.exec:
+      component: weather_api
+      action: forecast_weather
+      args:
+        q: collect_location.q_location
+        days: parameters.days_default
+    routing:
+      - to: respond
+
+  respond:
+    templating.handlebars:
+      text: "Weather for {{forecast.payload.location.name}}: {{forecast.payload.current.temp_c}}°C"
+    routing:
+      - out: true
 ```
 
 ## Flow Metadata
@@ -52,420 +62,456 @@ nodes:
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | string | Unique identifier (lowercase, hyphens allowed) |
-| `type` | enum | Flow type: `messaging`, `events`, `http`, `job` |
-| `start` | string | Name of the first node to execute |
+| `type` | string | Flow type: `messaging`, `webhook`, `timer`, `websocket`, `pubsub`, or custom |
+| `nodes` | object | Node definitions (minimum 1 node) |
 
 ### Optional Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `description` | string | Human-readable description |
-| `version` | string | Semantic version |
-| `channel` | string | Messaging channel filter |
-| `trigger` | string | Event trigger (for type: events) |
+| `title` | string | Human-readable title |
+| `description` | string | Flow description |
+| `tags` | array | Tags for categorisation |
+| `start` | string | Name of the first node to execute |
+| `parameters` | object | Flow-level parameters accessible in nodes |
+| `entrypoints` | object | Named entrypoints (e.g., `default`, `telegram`, `http:/path`) |
+| `schema_version` | integer | Schema version (default: 2) |
 
 ### Flow Types
 
-#### messaging
+| Type | Description |
+|------|-------------|
+| `messaging` | Triggered by incoming messages (chat bots, support agents) |
+| `webhook` | Triggered by HTTP webhooks |
+| `timer` | Triggered on schedule |
+| `websocket` | WebSocket connections |
+| `pubsub` | Pub/sub event triggers |
 
-Triggered by incoming messages:
+**Example types:**
 
 ```yaml
-id: chat-bot
+# Messaging flow (chat bot)
+id: support-bot
 type: messaging
-channel: teams  # Optional: filter to specific channel
 start: greet
 ```
 
-#### events
-
-Triggered by external events:
-
 ```yaml
-id: webhook-handler
-type: events
-trigger: webhook.received
+# Webhook flow
+id: github-webhook
+type: webhook
 start: process
 ```
 
-#### http
-
-Triggered by HTTP requests:
-
 ```yaml
-id: api-endpoint
-type: http
-method: POST
-path: /api/submit
-start: validate
-```
-
-#### job
-
-Scheduled or manually triggered:
-
-```yaml
+# Timer flow (scheduled)
 id: daily-report
-type: job
-schedule: "0 9 * * *"  # Cron syntax
+type: timer
 start: generate
 ```
 
 ## Nodes
+
+Nodes are the steps in a flow. Each node has:
+- **One operation key** — The action to perform
+- **Routing** — Where to go next
+- **Optional metadata** — Telemetry, retry, timeout, conditions
 
 ### Node Structure
 
 ```yaml
 nodes:
   node-name:
-    component.namespace:
-      config:
-        # Component configuration
-    state:
-      # State operations
-    routing:
-      # Next node(s)
+    operation.name:          # Operation key
+      key: value             # Operation config (NO config: wrapper)
+      another_key: value
+    routing:                 # Where to go next
+      - to: next-node
+    telemetry:              # Optional
+      span_name: "process-user"
+    retry:                  # Optional
+      max_attempts: 3
+    timeout:                # Optional
+      seconds: 30
+    when:                   # Optional condition
+      expression: "{{state.ready}}"
 ```
 
-### Component Reference
+### Operation Keys
 
-Components are referenced as `component.name` or `namespace.component.name`:
+Operations are named actions like `qa.process`, `mcp.exec`, `templating.handlebars`. The operation key identifies what the node does:
 
 ```yaml
-nodes:
-  call-llm:
-    component.llm-openai:
-      config:
-        model: gpt-4
-        temperature: 0.7
+# Q&A processing
+collect_info:
+  qa.process:
+    welcome: "Hello!"
+    questions:
+      - id: name
+        prompt: "What's your name?"
+        answer_type: text
+
+# MCP tool execution
+call_api:
+  mcp.exec:
+    component: my_api
+    action: get_data
+    args:
+      id: "{{collect_info.name}}"
+
+# Handlebars templating
+respond:
+  templating.handlebars:
+    text: "Hello {{collect_info.name}}!"
 ```
 
-### Configuration
-
-Pass configuration to components:
+**Important:** Configuration goes directly under the operation key. There is **no `config:` wrapper**.
 
 ```yaml
-nodes:
-  template:
-    component.template:
-      config:
-        template: "Hello {{name}}!"
+# CORRECT - config directly under operation
+my_node:
+  templating.handlebars:
+    text: "Hello world"
 
-  http:
-    component.http:
-      config:
-        url: "https://api.example.com/data"
-        method: GET
-        headers:
-          Authorization: "Bearer {{secrets.api_key}}"
+# WRONG - do not use config: wrapper
+my_node:
+  templating.handlebars:
+    config:              # NO! Don't do this
+      text: "Hello world"
 ```
 
-### Template Syntax
+### Common Operations
 
-Use Handlebars-style templates:
-
-```yaml
-config:
-  template: "Hello {{message.from.name}}"
-  data:
-    user_id: "{{message.from.id}}"
-    timestamp: "{{ctx.timestamp}}"
-```
-
-Available contexts:
-- `message` - Incoming message
-- `state` - Flow state
-- `session` - Session data
-- `secrets` - Secret values
-- `env` - Environment variables
-- `ctx` - Execution context
-
-## State Management
-
-### Set State
-
-```yaml
-nodes:
-  save-data:
-    component.template:
-      config:
-        template: "Saved!"
-    state:
-      set:
-        user_name: "{{message.text}}"
-        counter: 1
-```
-
-### Read State
-
-```yaml
-nodes:
-  use-data:
-    component.template:
-      config:
-        template: "Hello {{state.user_name}}!"
-```
-
-### Increment/Modify
-
-```yaml
-state:
-  set:
-    counter: "{{state.counter + 1}}"
-  append:
-    history: "{{message.text}}"
-```
-
-### Clear State
-
-```yaml
-state:
-  clear:
-    - temp_data
-    - user_input
-```
+| Operation | Description |
+|-----------|-------------|
+| `qa.process` | Structured Q&A collection |
+| `mcp.exec` | Execute MCP tool |
+| `templating.handlebars` | Handlebars template rendering |
+| `handle_message` | Generic message handling |
 
 ## Routing
 
-### Simple Routing
+Routing determines which node executes next. YGTc v2 supports:
+
+### Shorthand Routing
+
+For simple terminal nodes:
 
 ```yaml
-routing:
-  next: next-node
+routing: out      # Terminal - end flow
+routing: reply    # Reply to origin and end
 ```
 
-### End Flow
+### Array Routing
+
+For explicit routing:
 
 ```yaml
+# Single next node
 routing:
-  next: __end__
+  - to: next-node
+
+# Terminal node
+routing:
+  - out: true
+
+# Reply and continue
+routing:
+  - reply: true
+  - to: next-node
+
+# Multiple targets (fan-out)
+routing:
+  - to: handler-a
+  - to: handler-b
 ```
+
+### Routing Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `to` | string | Target node name |
+| `out` | boolean | Terminal edge (end flow) |
+| `reply` | boolean | Reply to origin |
+| `status` | string | Status code for routing |
 
 ### Conditional Routing
 
-```yaml
-routing:
-  conditions:
-    - when: "{{state.intent}} == 'help'"
-      next: help-node
-    - when: "{{state.intent}} == 'quit'"
-      next: goodbye-node
-  default: fallback-node
-```
-
-### Condition Operators
-
-| Operator | Example |
-|----------|---------|
-| `==` | `{{state.x}} == 'value'` |
-| `!=` | `{{state.x}} != 'value'` |
-| `>` | `{{state.count}} > 5` |
-| `<` | `{{state.count}} < 10` |
-| `>=` | `{{state.count}} >= 1` |
-| `<=` | `{{state.count}} <= 100` |
-| `contains` | `{{message.text}} contains 'help'` |
-| `startsWith` | `{{message.text}} startsWith '/'` |
-| `exists` | `{{state.user_id}} exists` |
-| `!exists` | `{{state.user_id}} !exists` |
-
-### Multiple Conditions
-
-```yaml
-routing:
-  conditions:
-    - when: "{{state.authenticated}} == true && {{state.role}} == 'admin'"
-      next: admin-panel
-    - when: "{{state.authenticated}} == true"
-      next: user-dashboard
-  default: login
-```
-
-## MCP Configuration
-
-### Enable MCP
-
-```yaml
-mcp:
-  enabled: true
-```
-
-### Define Tools
-
-```yaml
-mcp:
-  enabled: true
-  tools:
-    - name: search
-      component: component.vector-search
-      config:
-        store: knowledge-base
-    - name: send_email
-      component: component.email
-      config:
-        from: "{{env.EMAIL_FROM}}"
-```
-
-### Prompts
-
-```yaml
-mcp:
-  prompts:
-    assistant: |
-      You are a helpful assistant.
-      Use the search tool to find relevant information.
-```
-
-## Error Handling
-
-### On Error
+For conditional routing, use `when` on the node:
 
 ```yaml
 nodes:
-  risky-operation:
-    component.http:
-      config:
-        url: "{{api_url}}"
-    on_error:
-      next: error-handler
+  check:
+    handle_message:
+      input: "{{in.text}}"
+    routing:
+      - to: high_priority
+      - to: low_priority
 
-  error-handler:
-    component.template:
-      config:
-        template: "Sorry, something went wrong: {{error.message}}"
+  high_priority:
+    when:
+      expression: "{{check.priority}} == 'high'"
+    templating.handlebars:
+      text: "Urgent!"
+    routing: out
+
+  low_priority:
+    when:
+      expression: "{{check.priority}} != 'high'"
+    templating.handlebars:
+      text: "Standard."
+    routing: out
+```
+
+## Parameters
+
+Flow-level parameters accessible throughout the flow:
+
+```yaml
+parameters:
+  default_model: gpt-4o
+  max_retries: 3
+  api_base: "https://api.example.com"
+
+nodes:
+  call_llm:
+    mcp.exec:
+      component: llm
+      action: chat
+      args:
+        model: parameters.default_model
+```
+
+## Data References
+
+Reference data from previous nodes, parameters, and context:
+
+### Previous Node Output
+
+```yaml
+# Reference output from 'collect_info' node
+text: "Hello {{collect_info.name}}"
+location: collect_info.q_location
+```
+
+### Parameters
+
+```yaml
+# Reference flow parameters
+days: parameters.days_default
+```
+
+### Nested Access
+
+```yaml
+# Access nested properties
+city: "{{forecast.payload.location.name}}"
+temp: "{{forecast.payload.current.temp_c}}"
+```
+
+### Handlebars Iteration
+
+```yaml
+templating.handlebars:
+  text: |
+    Forecast:
+    {{#forecast.payload.forecast}}
+    - {{date}}: {{day.condition.text}}
+    {{/forecast.payload.forecast}}
+```
+
+## Node Metadata
+
+### Telemetry
+
+Custom span names and attributes for observability:
+
+```yaml
+my_node:
+  qa.process:
+    questions: [...]
+  telemetry:
+    span_name: "collect-user-info"
+    attributes:
+      flow_step: "intake"
+      category: "user"
+    sampling: "always"
 ```
 
 ### Retry
 
+Retry configuration for transient failures:
+
 ```yaml
-nodes:
-  with-retry:
-    component.http:
-      config:
-        url: "{{api_url}}"
-    retry:
-      max_attempts: 3
-      delay_ms: 1000
-      backoff: exponential
+my_node:
+  mcp.exec:
+    component: external_api
+    action: fetch
+  retry:
+    max_attempts: 3
+    delay_ms: 1000
+    backoff: exponential
 ```
 
-## Timeouts
+### Timeout
+
+Execution timeout:
 
 ```yaml
-nodes:
-  long-operation:
-    component.llm-openai:
-      config:
-        model: gpt-4
-    timeout_ms: 30000
+my_node:
+  mcp.exec:
+    component: slow_api
+    action: process
+  timeout:
+    seconds: 60
 ```
 
-## Comments
+### Annotations and Meta
+
+Custom metadata for tooling:
 
 ```yaml
-# This is a comment
-id: my-flow
-type: messaging
-
-nodes:
-  # Entry point of the flow
-  entry:
-    component.template:
-      config:
-        template: "Welcome!"  # Inline comment
+my_node:
+  qa.process:
+    questions: [...]
+  annotations:
+    author: "team-a"
+    version: "1.0"
+  meta:
+    custom_field: "value"
 ```
 
 ## Complete Example
 
+Here's a complete weather bot flow demonstrating all concepts:
+
 ```yaml
-# IT Support Flow
-# Handles user support requests via chat
-
-id: it-support-flow
+id: weather_bot
+title: Weather Bot
+description: Ask for a location, call the MCP weather API, and reply with a forecast.
 type: messaging
-description: Intelligent IT support assistant
-version: "1.2.0"
-start: greet
+start: collect_location
 
-mcp:
-  enabled: true
-  tools:
-    - name: search_kb
-      component: component.vector-search
-      config:
-        store: it-knowledge-base
-  prompts:
-    support: |
-      You are an IT support assistant.
-      Use the search_kb tool to find relevant documentation.
-      Be helpful and concise.
+parameters:
+  days_default: 3
 
 nodes:
-  greet:
-    component.template:
-      config:
-        template: "Hello! I'm your IT support assistant. How can I help?"
+  collect_location:
+    qa.process:
+      welcome: "Hi there! Let's get your weather forecast."
+      questions:
+        - id: q_location
+          prompt: "Which city do you want to check?"
+          answer_type: text
+          max_words: 5
     routing:
-      next: classify
+      - to: forecast_weather
 
-  classify:
-    component.llm-openai:
-      config:
-        model: gpt-3.5-turbo
-        system: "Classify: password, software, hardware, other"
-    state:
-      set:
-        intent: "{{response.classification}}"
+  forecast_weather:
+    mcp.exec:
+      component: weather_api
+      action: forecast_weather
+      args:
+        q: collect_location.q_location
+        days: parameters.days_default
     routing:
-      conditions:
-        - when: "{{state.intent}} == 'password'"
-          next: password-reset
-        - when: "{{state.intent}} == 'software'"
-          next: software-help
-      default: general-help
+      - to: weather_text
 
-  password-reset:
-    component.template:
-      config:
-        template: "I'll help you reset your password. Please visit: https://reset.company.com"
-    routing:
-      next: __end__
+  weather_text:
+    templating.handlebars:
+      text: |
+        Here's the forecast for {{forecast_weather.payload.location.name}}, {{forecast_weather.payload.location.country}}:
 
-  software-help:
-    component.llm-openai:
-      config:
-        model: gpt-4
-        system: "{{prompts.support}}"
-        tools:
-          - search_kb
-    routing:
-      next: __end__
+        Now: {{forecast_weather.payload.current.condition.text}}, {{forecast_weather.payload.current.temp_c}}°C
+        Wind: {{forecast_weather.payload.current.wind_kph}} kph | Humidity: {{forecast_weather.payload.current.humidity}}%
 
-  general-help:
-    component.llm-openai:
-      config:
-        model: gpt-4
-        system: "{{prompts.support}}"
-        tools:
-          - search_kb
+        Forecast (next {{parameters.days_default}} day(s)):
+        {{#forecast_weather.payload.forecast}}
+        - {{date}}: ↑ {{day.maxtemp_c}}°C | ↓ {{day.mintemp_c}}°C — {{day.condition.text}}
+        {{/forecast_weather.payload.forecast}}
     routing:
-      next: __end__
+      - out: true
 ```
+
+## Sidecar Files
+
+YGTc v2 flows use a **sidecar file** (`<flow>.ygtc.resolve.json`) to track component bindings. This separates the flow logic from component sources:
+
+```json
+{
+  "schema_version": 1,
+  "nodes": {
+    "collect_location": {
+      "source": {
+        "kind": "remote",
+        "reference": "oci://ghcr.io/greentic-ai/components/qa:0.1.0"
+      }
+    },
+    "forecast_weather": {
+      "source": {
+        "kind": "local",
+        "path": "components/weather/target/wasm32-wasip2/release/weather.wasm"
+      }
+    }
+  }
+}
+```
+
+The sidecar is managed by `greentic-flow` commands. You don't edit it manually.
 
 ## Schema Validation
 
-Validate your flow against the schema:
+Validate your flow:
 
 ```bash
-greentic-dev flow validate -f my-flow.ygtc --strict
+# Validate a single flow
+greentic-flow doctor flows/weather_bot.ygtc
+
+# Validate all flows in a directory
+greentic-flow doctor flows/
+
+# JSON output for CI
+greentic-flow doctor --json flows/weather_bot.ygtc
 ```
 
-Full JSON Schema available at:
+Full JSON Schema:
 ```
 https://raw.githubusercontent.com/greentic-ai/greentic-flow/refs/heads/master/schemas/ygtc.flow.schema.json
 ```
 
+## Migration from v1
+
+If you have legacy flows using the `component.name` syntax with `config:` wrappers:
+
+**v1 (legacy):**
+```yaml
+nodes:
+  my-node:
+    component.template:
+      config:
+        template: "Hello {{name}}"
+    routing:
+      next: other-node
+```
+
+**v2 (current):**
+```yaml
+nodes:
+  my-node:
+    templating.handlebars:
+      text: "Hello {{name}}"
+    routing:
+      - to: other-node
+```
+
+Key changes:
+1. Operation keys replace `component.name` (e.g., `templating.handlebars`)
+2. No `config:` wrapper - config goes directly under operation
+3. Routing uses array format with `to:` key
+4. Use `- out: true` instead of `next: __end__`
+
 ## Related
 
-- [Flows](/docs/architecture/flows) - Flow concepts
-- [CLI Reference](/docs/reference/cli) - CLI commands
-- [Component Manifest](/docs/reference/component-manifest) - Component specification
+- [Flows](/docs/architecture/flows) — Flow concepts
+- [CLI Reference](/docs/reference/cli) — CLI commands
+- [Component Manifest](/docs/reference/component-manifest) — Component specification

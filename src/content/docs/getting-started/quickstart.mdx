@@ -30,7 +30,7 @@ nodes:
   echo:
     component.template:
       config:
-        template: "You said: {{message.text}}"
+        template: "You said: {{in.text}}"
     routing:
       next: __end__
 ```
@@ -98,14 +98,14 @@ nodes:
   greet:
     component.template:
       config:
-        template: "Nice to meet you, {{message.text}}! How can I help you today?"
+        template: "Nice to meet you, {{in.text}}! How can I help you today?"
     routing:
       next: echo
 
   echo:
     component.template:
       config:
-        template: "You asked: {{message.text}}"
+        template: "You asked: {{in.text}}"
     routing:
       next: echo
 ```
