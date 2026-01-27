@@ -117,7 +117,7 @@ const difficultyColors = {
 </BaseLayout>
 
 <script>
-  // Generate step tracker from h2 headings
+  // Generate step tracker from h2 headings with scroll-based highlighting
   function generateSteps() {
     const article = document.querySelector('article');
     const stepsNav = document.getElementById('tutorial-steps');
@@ -126,12 +126,14 @@ const difficultyColors = {
     const headings = article.querySelectorAll('h2');
     if (headings.length === 0) return;
 
+    const stepItems: { div: HTMLDivElement; circle: HTMLDivElement; link: HTMLAnchorElement; headingId: string }[] = [];
+
     headings.forEach((heading, index) => {
       const div = document.createElement('div');
       div.className = 'flex items-center gap-2';
 
       const circle = document.createElement('div');
-      circle.className = 'w-6 h-6 rounded-full border-2 border-border flex items-center justify-center text-xs font-medium';
+      circle.className = 'w-6 h-6 rounded-full border-2 border-border flex items-center justify-center text-xs font-medium text-muted-foreground transition-colors';
       circle.textContent = String(index + 1);
 
       const a = document.createElement('a');
@@ -142,9 +144,49 @@ const difficultyColors = {
       a.textContent = heading.textContent;
       a.className = 'text-muted-foreground hover:text-foreground transition-colors truncate';
 
+      stepItems.push({ div, circle, link: a, headingId: heading.id });
+
       div.appendChild(circle);
       div.appendChild(a);
       stepsNav.appendChild(div);
+    });
+
+    // Set up Intersection Observer for scroll-based highlighting
+    const observerOptions = {
+      root: null,
+      rootMargin: '-80px 0px -70% 0px',
+      threshold: 0,
+    };
+
+    function updateActiveStep(activeId: string) {
+      stepItems.forEach(({ circle, link, headingId }) => {
+        const isActive = headingId === activeId;
+
+        if (isActive) {
+          circle.className = 'w-6 h-6 rounded-full border-2 border-primary bg-primary/20 flex items-center justify-center text-xs font-medium text-primary transition-colors';
+          link.className = 'text-primary font-medium transition-colors truncate';
+        } else {
+          circle.className = 'w-6 h-6 rounded-full border-2 border-border flex items-center justify-center text-xs font-medium text-muted-foreground transition-colors';
+          link.className = 'text-muted-foreground hover:text-foreground transition-colors truncate';
+        }
+      });
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          updateActiveStep(entry.target.id);
+        }
+      });
+    }, observerOptions);
+
+    headings.forEach((heading) => observer.observe(heading));
+
+    // Handle click to manually set active state
+    stepItems.forEach(({ link, headingId }) => {
+      link.addEventListener('click', () => {
+        updateActiveStep(headingId);
+      });
     });
   }
 
