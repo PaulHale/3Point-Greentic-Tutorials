@@ -26,19 +26,23 @@ const base = import.meta.env.BASE_URL;
     <!-- Desktop Navigation -->
     <nav class="hidden md:flex items-center gap-1">
       {
-        mainNavItems.map((item) => (
-          <a
-            href={`${base}${item.href.slice(1)}`}
-            class:list={[
-              'px-4 py-2 text-sm font-medium rounded-md transition-colors',
-              currentPath === item.href || currentPath.startsWith(item.href + '/')
-                ? 'text-primary bg-primary/10'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-            ]}
-          >
-            {item.title}
-          </a>
-        ))
+        mainNavItems.map((item) => {
+          const itemHref = `${base}${item.href.slice(1)}`;
+          const isActive = currentPath === itemHref || currentPath.startsWith(itemHref + '/') || (item.href === '/' && currentPath === base);
+          return (
+            <a
+              href={itemHref}
+              class:list={[
+                'px-4 py-2 text-sm font-medium rounded-md transition-colors',
+                isActive
+                  ? 'text-primary bg-primary/10'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+              ]}
+            >
+              {item.title}
+            </a>
+          );
+        })
       }
     </nav>
 
@@ -93,19 +97,23 @@ const base = import.meta.env.BASE_URL;
   <div id="mobile-menu" class="hidden md:hidden border-t border-border bg-background">
     <nav class="container mx-auto px-4 py-4 space-y-1">
       {
-        mainNavItems.map((item) => (
-          <a
-            href={`${base}${item.href.slice(1)}`}
-            class:list={[
-              'block px-4 py-2 text-sm font-medium rounded-md transition-colors',
-              currentPath === item.href || currentPath.startsWith(item.href + '/')
-                ? 'text-primary bg-primary/10'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-            ]}
-          >
-            {item.title}
-          </a>
-        ))
+        mainNavItems.map((item) => {
+          const itemHref = `${base}${item.href.slice(1)}`;
+          const isActive = currentPath === itemHref || currentPath.startsWith(itemHref + '/') || (item.href === '/' && currentPath === base);
+          return (
+            <a
+              href={itemHref}
+              class:list={[
+                'block px-4 py-2 text-sm font-medium rounded-md transition-colors',
+                isActive
+                  ? 'text-primary bg-primary/10'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+              ]}
+            >
+              {item.title}
+            </a>
+          );
+        })
       }
     </nav>
   </div>
