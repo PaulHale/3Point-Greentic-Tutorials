@@ -1,0 +1,181 @@
+---
+title: "Design Manifesto"
+description: "Core design principles and philosophy behind the Greentic platform."
+---
+
+# Design Manifesto
+
+The Greentic platform is built on a set of core principles that guide every architectural decision.
+
+## Core Principles
+
+### 1. Contract Before Code
+
+> Define the interface before implementing the logic.
+
+Every component, flow, and integration starts with a clear contract:
+
+- **WIT interfaces** define component APIs
+- **JSON Schemas** validate configuration
+- **Manifests** describe capabilities
+- **Types** are shared across the codebase
+
+This approach ensures:
+- Clear boundaries between components
+- Testable contracts
+- Documentation as code
+- Breaking changes are visible
+
+### 2. Multi-Tenant First
+
+> Every API requires tenant context. No exceptions.
+
+The `TenantCtx` is propagated through every layer:
+
+```rust
+// Every function that touches tenant data
+fn process_message(ctx: &TenantCtx, message: Message) -> Result<Response>
+
+// Never this
+fn process_message(message: Message) -> Result<Response>  // Wrong!
+```
+
+Benefits:
+- Tenant isolation by design
+- Audit trails are automatic
+- Resource accounting is built-in
+- Security boundaries are clear
+
+### 3. Manifest = Truth
+
+> Components and packs are self-describing.
+
+Every component carries its manifest:
+
+```json
+{
+  "name": "llm-openai",
+  "version": "1.0.0",
+  "capabilities": ["network:outbound"],
+  "config_schema": "schemas/v1/config.schema.json",
+  "wit_world": "greentic:component@0.5.0"
+}
+```
+
+This enables:
+- Runtime capability checking
+- Configuration validation
+- Automatic documentation
+- Dependency resolution
+
+### 4. Runtime Agnostic
+
+> Same contract works everywhere.
+
+Components can run:
+- **In-process** — Direct Wasm execution
+- **Sidecar** — Separate process
+- **Remote** — Network call
+- **Mocked** — Test doubles
+
+The component interface is identical in all cases.
+
+### 5. Security & Telemetry Built-In
+
+> Not an afterthought.
+
+Every component execution includes:
+- **mTLS** — Encrypted, authenticated connections
+- **OpenTelemetry** — Traces, metrics, logs
+- **Audit logging** — Who did what, when
+- **Capability enforcement** — Sandboxed execution
+
+## Architectural Decisions
+
+### WebAssembly Components
+
+**Why Wasm?**
+
+| Benefit | Impact |
+|---------|--------|
+| Sandboxed execution | Security by default |
+| Language agnostic | Use the best tool |
+| Portable | Run anywhere |
+| Fast startup | Serverless-friendly |
+| Deterministic | Reproducible results |
+
+### Declarative Flows
+
+**Why YAML flows instead of code?**
+
+- **Auditable** — Non-developers can review
+- **Versionable** — Git-friendly format
+- **Validatable** — Schema-based checking
+- **Visual** — Can generate diagrams
+- **Portable** — No language lock-in
+
+### Component Model
+
+**Why the component model?**
+
+The WebAssembly Component Model provides:
+- Strong typing at boundaries
+- Composability
+- Resource management
+- Async support
+- Standardised interfaces
+
+## Anti-Patterns We Avoid
+
+### God Objects
+
+Components do one thing well. If a component needs many capabilities, split it.
+
+### Implicit State
+
+All state is explicit:
+- Flow state is in `state`
+- Component state is in config
+- No hidden globals
+
+### Magic Configuration
+
+Every config key is documented in the schema. No undocumented options.
+
+### Tight Coupling
+
+Components communicate through defined interfaces, never through shared memory or backdoors.
+
+### Security Afterthoughts
+
+Security is designed in from day one, not bolted on later.
+
+## Evolution Principles
+
+### Backwards Compatibility
+
+- Additive changes are safe
+- Breaking changes require new versions
+- Deprecation before removal
+- Migration guides provided
+
+### Extension Points
+
+The platform is designed to be extended:
+- Custom components
+- Custom providers
+- Custom tools (MCP)
+- Custom channels
+
+### Community First
+
+- Open source core
+- Clear contribution guidelines
+- RFC process for major changes
+- Transparent roadmap
+
+## Related
+
+- [Architecture Overview](/docs/architecture/overview) — Platform architecture
+- [Components](/docs/architecture/components) — Component model
+- [Security](/docs/architecture/security) — Security architecture

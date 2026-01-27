@@ -1,0 +1,265 @@
+---
+title: "Supply Chain"
+description: "Secure distribution and verification of Greentic packs through the enterprise supply chain."
+---
+
+import { SupplyChainDiagram } from '@/components/diagrams/SupplyChainDiagram';
+
+# Supply Chain
+
+The Greentic supply chain ensures that packs are securely built, signed, distributed, and verified throughout their lifecycle.
+
+## Overview
+
+The supply chain provides:
+
+- **Integrity** — Cryptographic signatures verify pack authenticity
+- **Provenance** — Full audit trail from source to deployment
+- **Compliance** — Enterprise-grade controls for regulated environments
+- **Automation** — CI/CD integration for continuous delivery
+
+## Supply Chain Flow
+
+<SupplyChainDiagram client:load className="my-8" />
+
+## Pack Building
+
+### Local Development
+
+```bash
+# Build a pack from flows and components
+greentic-dev pack build \
+  --flow flows/my-flow.ygtc \
+  --output dist/my-pack.gtpack
+
+# Validate pack structure
+greentic-dev pack validate dist/my-pack.gtpack
+```
+
+### CI/CD Integration
+
+```yaml
+# GitHub Actions example
+name: Build Pack
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Greentic
+        uses: greentic-ai/setup-greentic@v1
+
+      - name: Build Pack
+        run: greentic-dev pack build -f flows/*.ygtc -o dist/
+
+      - name: Sign Pack
+        run: greentic-dev pack sign dist/*.gtpack --key ${{ secrets.SIGNING_KEY }}
+
+      - name: Publish
+        run: greentic-dev pack publish dist/*.gtpack --registry ${{ vars.REGISTRY }}
+```
+
+## Pack Signing
+
+All production packs must be cryptographically signed.
+
+### Key Management
+
+```bash
+# Generate a new signing key pair
+greentic-dev keys generate --output ~/.greentic/keys/
+
+# Export public key for distribution
+greentic-dev keys export --public --output my-org-public.pem
+```
+
+### Signing Process
+
+```bash
+# Sign a pack with your private key
+greentic-dev pack sign my-pack.gtpack \
+  --key ~/.greentic/keys/private.pem \
+  --output my-pack-signed.gtpack
+
+# The signed pack includes:
+# - Original pack contents
+# - SHA-256 content hash
+# - Ed25519 signature
+# - Signer identity (public key fingerprint)
+# - Timestamp
+```
+
+### Signature Verification
+
+```bash
+# Verify a pack signature
+greentic-dev pack verify my-pack-signed.gtpack \
+  --trusted-keys ./trusted-keys/
+
+# Outputs:
+# ✓ Signature valid
+# ✓ Signer: ai.greentic.official (fingerprint: abc123...)
+# ✓ Signed: 2024-01-15T10:30:00Z
+# ✓ Content hash matches
+```
+
+## Registry Distribution
+
+### Publishing Packs
+
+```bash
+# Authenticate with registry
+greentic-dev auth login --registry registry.greentic.ai
+
+# Publish signed pack
+greentic-dev pack publish my-pack-signed.gtpack \
+  --registry registry.greentic.ai \
+  --visibility private
+
+# Pack is now available at:
+# registry.greentic.ai/my-org/my-pack:1.0.0
+```
+
+### Registry Types
+
+| Type | Description | Use Case |
+|------|-------------|----------|
+| **Public** | Open access, community packs | Open source, examples |
+| **Private** | Org-only access | Enterprise, proprietary |
+| **Air-gapped** | No internet, local only | Secure environments |
+
+### Pulling Packs
+
+```bash
+# Pull a pack from registry
+greentic-dev pack pull registry.greentic.ai/my-org/my-pack:1.0.0
+
+# Pull with signature verification (default)
+greentic-dev pack pull my-pack:latest --verify
+
+# Pull to specific location
+greentic-dev pack pull my-pack:latest --output ./packs/
+```
+
+## Verification Pipeline
+
+Before deployment, packs go through a verification pipeline:
+
+### 1. Signature Check
+
+```rust
+// Runner verifies signature on load
+let pack = Pack::load("my-pack.gtpack")?;
+pack.verify_signature(&trusted_keys)?;
+```
+
+### 2. Content Integrity
+
+```rust
+// Verify content hash matches
+let computed_hash = pack.compute_hash();
+assert_eq!(computed_hash, pack.manifest.content_hash);
+```
+
+### 3. Capability Audit
+
+```rust
+// Check requested capabilities against policy
+for component in pack.components() {
+    policy.verify_capabilities(component.capabilities())?;
+}
+```
+
+### 4. Version Compatibility
+
+```rust
+// Ensure runtime compatibility
+let runtime_version = Runtime::version();
+pack.manifest.check_compatibility(runtime_version)?;
+```
+
+## Enterprise Controls
+
+### Policy Enforcement
+
+```yaml
+# supply-chain-policy.yaml
+apiVersion: greentic.ai/v1
+kind: SupplyChainPolicy
+
+spec:
+  signing:
+    required: true
+    trusted_signers:
+      - fingerprint: "abc123..."
+        name: "Official Greentic"
+      - fingerprint: "def456..."
+        name: "My Organization"
+
+  capabilities:
+    allowed:
+      - network:outbound
+      - filesystem:read
+    denied:
+      - filesystem:write
+      - process:spawn
+
+  sources:
+    allowed_registries:
+      - registry.greentic.ai
+      - internal.mycompany.com
+    blocked_registries:
+      - "*"  # Block all others
+```
+
+### Audit Logging
+
+All supply chain operations are logged:
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00Z",
+  "event": "pack.deployed",
+  "pack": "my-pack:1.0.0",
+  "signer": "ai.greentic.official",
+  "signature_verified": true,
+  "tenant": "acme-corp",
+  "user": "deploy-bot",
+  "source_registry": "registry.greentic.ai"
+}
+```
+
+## Best Practices
+
+### Development
+
+1. **Version everything** — Use semantic versioning for packs
+2. **Sign early** — Integrate signing into CI/CD
+3. **Rotate keys** — Regular key rotation schedule
+4. **Audit dependencies** — Review component sources
+
+### Operations
+
+1. **Verify always** — Never skip signature verification
+2. **Limit capabilities** — Principle of least privilege
+3. **Monitor deployments** — Track what's running where
+4. **Plan rollbacks** — Keep previous versions available
+
+### Security
+
+1. **Protect signing keys** — Use HSM or secure key storage
+2. **Restrict registry access** — Network segmentation
+3. **Review policies** — Regular policy audits
+4. **Incident response** — Have a revocation plan
+
+## Related
+
+- [Packs](/docs/architecture/packs) — Pack structure and building
+- [Security](/docs/architecture/security) — Security architecture
+- [CLI Reference](/docs/reference/cli) — Full command documentation

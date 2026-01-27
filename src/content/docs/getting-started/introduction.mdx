@@ -4,6 +4,8 @@ description: Learn what Greentic is and how it enables digital workers that exec
 order: 1
 ---
 
+import { FiveLayersDiagram } from '@/components/diagrams/FiveLayersDiagram';
+
 # Introduction to Greentic
 
 Greentic is a **modular, multi-tenant automation platform** built around WebAssembly components. It enables you to build digital workers that can execute complex tasks autonomously across multiple channels and integrations.
@@ -92,24 +94,7 @@ Packs are the unit of distribution through the Greentic supply chain, ensuring t
 
 ## Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    DEVELOPER TOOLS                          │
-│  CLI • GUI Editor • IDE Plugins • WebChat Testing           │
-├─────────────────────────────────────────────────────────────┤
-│                    SUPPLY CHAIN                             │
-│  Build → Store → Distribute → Deploy                        │
-├─────────────────────────────────────────────────────────────┤
-│                    RUNTIME                                  │
-│  Runner • Session • State • MCP Execution                   │
-├─────────────────────────────────────────────────────────────┤
-│                    INTEGRATION                              │
-│  6 Channels • Events • OAuth • External APIs                │
-├─────────────────────────────────────────────────────────────┤
-│                    FOUNDATION                               │
-│  Types • Interfaces • Telemetry                             │
-└─────────────────────────────────────────────────────────────┘
-```
+<FiveLayersDiagram client:load className="my-8" />
 
 ## Why Greentic?
 

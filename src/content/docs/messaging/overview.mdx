@@ -4,6 +4,8 @@ description: Connect your digital workers to Teams, Slack, WhatsApp, Telegram, W
 order: 1
 ---
 
+import { MessagingArchitectureDiagram } from '@/components/diagrams/MessagingArchitectureDiagram';
+
 # Messaging Channels
 
 Greentic's messaging platform connects your digital workers to users wherever they are. Six channels are supported out of the box.
@@ -21,27 +23,7 @@ Greentic's messaging platform connects your digital workers to users wherever th
 
 ## Architecture
 
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Teams     │     │   Slack     │     │  WhatsApp   │
-│   Client    │     │   Client    │     │   Client    │
-└──────┬──────┘     └──────┬──────┘     └──────┬──────┘
-       │                   │                   │
-       ▼                   ▼                   ▼
-┌──────────────────────────────────────────────────────┐
-│                  Messaging Gateway                    │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐           │
-│  │  Teams   │  │  Slack   │  │ WhatsApp │  ...      │
-│  │ Adapter  │  │ Adapter  │  │ Adapter  │           │
-│  └──────────┘  └──────────┘  └──────────┘           │
-└──────────────────────────┬───────────────────────────┘
-                           │
-                           ▼
-┌──────────────────────────────────────────────────────┐
-│                  Flow Runner                          │
-│              (Executes YGTC flows)                   │
-└──────────────────────────────────────────────────────┘
-```
+<MessagingArchitectureDiagram client:load className="my-8" />
 
 Each adapter normalises channel-specific formats into a common message structure.
 

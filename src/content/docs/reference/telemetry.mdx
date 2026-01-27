@@ -1,0 +1,359 @@
+---
+title: "Telemetry"
+description: "Observability, monitoring, and debugging for Greentic flows and components."
+---
+
+import { TraceStructureDiagram } from '@/components/diagrams/TraceStructureDiagram';
+
+# Telemetry
+
+Greentic provides comprehensive observability through OpenTelemetry-based telemetry, enabling monitoring, debugging, and performance analysis.
+
+## Overview
+
+The telemetry system captures:
+
+- **Traces** — End-to-end request flow visibility
+- **Metrics** — Performance and health indicators
+- **Logs** — Structured event logging
+- **Events** — Business and system events
+
+## Quick Start
+
+### Enable Telemetry
+
+```bash
+# Set the OTLP endpoint
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+
+# Run with telemetry enabled
+greentic-dev flow run -f my-flow.ygtc --telemetry
+```
+
+### View in Jaeger
+
+```bash
+# Start Jaeger for local development
+docker run -d --name jaeger \
+  -p 16686:16686 \
+  -p 4317:4317 \
+  jaegertracing/all-in-one:latest
+
+# Open UI at http://localhost:16686
+```
+
+## Distributed Tracing
+
+### Trace Structure
+
+Every flow execution creates a trace with nested spans showing the execution hierarchy:
+
+<TraceStructureDiagram client:load className="my-8" />
+
+### Span Attributes
+
+Each span includes contextual attributes:
+
+```json
+{
+  "trace_id": "abc123...",
+  "span_id": "def456...",
+  "name": "component.llm-openai.execute",
+  "attributes": {
+    "greentic.tenant_id": "acme-corp",
+    "greentic.flow_id": "support-bot",
+    "greentic.node_id": "classify",
+    "greentic.component": "llm-openai",
+    "llm.model": "gpt-4o",
+    "llm.tokens.prompt": 150,
+    "llm.tokens.completion": 45,
+    "llm.latency_ms": 1234
+  }
+}
+```
+
+### Context Propagation
+
+Trace context is automatically propagated:
+
+```rust
+// In component code
+use greentic_telemetry::Span;
+
+pub fn execute(ctx: &Context, input: Value) -> Result<Value> {
+    // Child span automatically linked to parent
+    let span = Span::current();
+    span.set_attribute("custom.key", "value");
+
+    // Context propagated to HTTP calls
+    let response = ctx.http_client()
+        .get("https://api.example.com")
+        .send()?;  // Trace headers injected automatically
+
+    Ok(response.json()?)
+}
+```
+
+## Metrics
+
+### Built-in Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `greentic.flow.executions` | Counter | Total flow executions |
+| `greentic.flow.duration_ms` | Histogram | Flow execution time |
+| `greentic.flow.errors` | Counter | Flow errors by type |
+| `greentic.component.calls` | Counter | Component invocations |
+| `greentic.component.duration_ms` | Histogram | Component execution time |
+| `greentic.llm.tokens` | Counter | LLM token usage |
+| `greentic.llm.latency_ms` | Histogram | LLM API latency |
+
+### Custom Metrics
+
+```rust
+use greentic_telemetry::{Counter, Histogram};
+
+// Define custom metrics
+static ORDERS_PROCESSED: Counter = Counter::new(
+    "myapp.orders.processed",
+    "Number of orders processed"
+);
+
+static ORDER_VALUE: Histogram = Histogram::new(
+    "myapp.orders.value",
+    "Order value distribution"
+);
+
+// Record metrics
+ORDERS_PROCESSED.increment(1);
+ORDER_VALUE.record(order.total);
+```
+
+### Prometheus Export
+
+```yaml
+# docker-compose.yml
+services:
+  greentic-runner:
+    environment:
+      - OTEL_METRICS_EXPORTER=prometheus
+      - OTEL_EXPORTER_PROMETHEUS_PORT=9090
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+```
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: 'greentic'
+    static_configs:
+      - targets: ['greentic-runner:9090']
+```
+
+## Structured Logging
+
+### Log Levels
+
+| Level | Usage |
+|-------|-------|
+| `ERROR` | System failures requiring attention |
+| `WARN` | Unexpected but handled situations |
+| `INFO` | Significant business events |
+| `DEBUG` | Detailed diagnostic information |
+| `TRACE` | Very detailed tracing (development only) |
+
+### Log Format
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00.123Z",
+  "level": "INFO",
+  "target": "greentic_flow::executor",
+  "message": "Flow execution completed",
+  "trace_id": "abc123...",
+  "span_id": "def456...",
+  "tenant_id": "acme-corp",
+  "flow_id": "support-bot",
+  "duration_ms": 1234,
+  "node_count": 5
+}
+```
+
+### Configuration
+
+```bash
+# Set log level
+export RUST_LOG=greentic=info,greentic_flow=debug
+
+# JSON output for production
+export GREENTIC_LOG_FORMAT=json
+
+# Include span context
+export GREENTIC_LOG_SPANS=true
+```
+
+## Debugging
+
+### Flow Debugging
+
+```bash
+# Run with debug output
+greentic-dev flow run -f my-flow.ygtc --debug
+
+# Output includes:
+# - Node execution order
+# - State changes at each step
+# - Component inputs/outputs
+# - Timing information
+```
+
+### Interactive Debugging
+
+```bash
+# Start in debug mode with breakpoints
+greentic-dev flow debug -f my-flow.ygtc
+
+> break node:classify     # Set breakpoint
+> run                     # Start execution
+> state                   # Inspect current state
+> step                    # Execute next node
+> continue                # Continue to next breakpoint
+```
+
+### Trace Analysis
+
+```bash
+# Export trace for analysis
+greentic-dev trace export --trace-id abc123 --format json > trace.json
+
+# Analyze trace
+greentic-dev trace analyze trace.json
+
+# Output:
+# Total duration: 1234ms
+# Critical path: greet -> classify -> respond
+# Slowest span: component.llm-openai.execute (890ms)
+# Errors: 0
+```
+
+## Production Setup
+
+### Collector Configuration
+
+```yaml
+# otel-collector-config.yaml
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 10s
+    send_batch_size: 1000
+
+  attributes:
+    actions:
+      - key: environment
+        value: production
+        action: insert
+
+exporters:
+  otlp:
+    endpoint: "tempo:4317"
+    tls:
+      insecure: true
+
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+
+  loki:
+    endpoint: "http://loki:3100/loki/api/v1/push"
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch, attributes]
+      exporters: [otlp]
+
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheus]
+
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [loki]
+```
+
+### Grafana Dashboards
+
+Pre-built dashboards are available for:
+
+- **Flow Overview** — Execution rates, latencies, errors
+- **Component Performance** — Per-component metrics
+- **LLM Usage** — Token consumption, costs, latencies
+- **Tenant Analytics** — Per-tenant resource usage
+
+### Alerting
+
+```yaml
+# alertmanager rules
+groups:
+  - name: greentic
+    rules:
+      - alert: HighErrorRate
+        expr: rate(greentic_flow_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High flow error rate"
+
+      - alert: SlowFlowExecution
+        expr: histogram_quantile(0.95, greentic_flow_duration_ms) > 5000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Flow execution p95 latency above 5s"
+```
+
+## Best Practices
+
+### Development
+
+1. **Enable debug logging** — Use `RUST_LOG=debug` locally
+2. **Use Jaeger** — Visual trace analysis
+3. **Add custom spans** — Instrument important operations
+4. **Test telemetry** — Verify spans and metrics in tests
+
+### Production
+
+1. **Sample traces** — Use sampling for high-volume services
+2. **Set retention** — Configure appropriate data retention
+3. **Monitor costs** — Track telemetry storage costs
+4. **Secure endpoints** — Protect telemetry endpoints
+
+### Security
+
+1. **Sanitise data** — Never log sensitive information
+2. **Use TLS** — Encrypt telemetry in transit
+3. **Access control** — Restrict dashboard access
+4. **Audit access** — Log who views telemetry data
+
+## Related
+
+- [CLI Reference](/docs/reference/cli) — CLI telemetry options
+- [Security](/docs/architecture/security) — Security considerations
+- [Flows](/docs/architecture/flows) — Flow execution model

@@ -2,6 +2,7 @@ import { defineConfig } from 'astro/config';
 import react from '@astrojs/react';
 import mdx from '@astrojs/mdx';
 import tailwind from '@astrojs/tailwind';
+import { remarkBasePath } from './src/lib/remark-base-path.mjs';
 
 export default defineConfig({
   site: 'https://paulhale.github.io',
@@ -14,6 +15,7 @@ export default defineConfig({
         theme: 'github-dark',
         wrap: true,
       },
+      remarkPlugins: [remarkBasePath],
     }),
     tailwind({
       applyBaseStyles: false,
@@ -30,5 +32,6 @@ export default defineConfig({
       theme: 'github-dark',
       wrap: true,
     },
+    remarkPlugins: [remarkBasePath],
   },
 });
