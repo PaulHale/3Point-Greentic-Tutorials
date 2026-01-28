@@ -5,23 +5,129 @@ description: "Complete reference for the Greentic command-line tools"
 
 # CLI Reference
 
-Greentic provides several CLI tools for developing, testing, and deploying flows and components. The main tools are:
+The Greentic CLI provides commands for developing, testing, and deploying digital workers.
 
-- **`greentic-flow`** — Flow authoring, validation, and component binding
-- **`greentic-component`** — Component scaffolding, building, and testing
-- **`greentic-pack`** — Pack building and deployment
-- **`greentic-dev`** — Local development server and pack runner
+## Installation
 
-## greentic-flow
+```bash
+cargo install greentic
+greentic init
+```
 
-The flow CLI edits YGTc v2 flows in-place and maintains a resolve sidecar (`<flow>.ygtc.resolve.json`) that tracks component bindings.
+## Core Commands
+
+### init
+
+Initialize your Greentic environment:
+
+```bash
+greentic init
+```
+
+This command:
+- Creates configuration directories (~/.greentic/)
+- Registers your user account
+- Generates a `GREENTIC_TOKEN` for accessing the store
+
+### run
+
+Run the current flow:
+
+```bash
+greentic run
+```
+
+### doctor
+
+Check your environment and configuration:
+
+```bash
+greentic doctor
+```
+
+---
+
+## greentic secrets
+
+Manage secrets for your flows.
+
+### add
+
+Add a secret to your environment:
+
+```bash
+greentic secrets add <KEY> <value>
+```
+
+**Example:**
+```bash
+greentic secrets add TELEGRAM_TOKEN your_bot_token
+greentic secrets add WEATHERAPI_KEY your_api_key
+```
+
+---
+
+## greentic flow
+
+Manage flows: create, validate, deploy, and run.
+
+### pull
+
+Pull a flow from the Greentic store:
+
+```bash
+greentic flow pull <flow_name>.ygtc
+```
+
+**Example:**
+```bash
+greentic flow pull weather_bot_telegram.ygtc
+```
+
+### validate
+
+Validate a flow file:
+
+```bash
+greentic flow validate <file>.ygtc
+```
+
+### deploy
+
+Deploy a flow:
+
+```bash
+greentic flow deploy <file>.ygtc
+```
+
+### start
+
+Start an active flow:
+
+```bash
+greentic flow start <flow-id>
+```
+
+### stop
+
+Stop a running flow:
+
+```bash
+greentic flow stop <flow-id>
+```
+
+---
+
+### Flow Authoring Commands
+
+The following commands edit YGTc v2 flows in-place and maintain a resolve sidecar (`<flow>.ygtc.resolve.json`) that tracks component bindings.
 
 ### new
 
 Create a minimal v2 flow file:
 
 ```bash
-greentic-flow new --flow flows/main.ygtc --id main --type messaging \
+greentic flow new --flow flows/main.ygtc --id main --type messaging \
   [--schema-version 2] [--name "Title"] [--description "text"] [--force]
 ```
 
@@ -38,7 +144,7 @@ greentic-flow new --flow flows/main.ygtc --id main --type messaging \
 
 **Example:**
 ```bash
-greentic-flow new --flow flows/support.ygtc --id support-bot --type messaging \
+greentic flow new --flow flows/support.ygtc --id support-bot --type messaging \
   --name "Support Bot" --description "IT support assistant"
 ```
 
@@ -47,7 +153,7 @@ greentic-flow new --flow flows/support.ygtc --id support-bot --type messaging \
 Non-destructive metadata edits (name, description, tags, id, type, schema_version):
 
 ```bash
-greentic-flow update --flow flows/main.ygtc --name "New Title" --tags foo,bar
+greentic flow update --flow flows/main.ygtc --name "New Title" --tags foo,bar
 ```
 
 Preserves nodes and entrypoints. Changing `--type` is only allowed on empty flows. Fails if the file is missing.
@@ -58,7 +164,7 @@ Insert a component-backed node and keep the sidecar in sync. Always writes v2 YA
 
 **Local component (Wasm file):**
 ```bash
-greentic-flow add-step --flow flows/main.ygtc \
+greentic flow add-step --flow flows/main.ygtc \
   --node-id hello-world \
   --operation handle_message \
   --payload '{"input":"hi"}' \
@@ -67,7 +173,7 @@ greentic-flow add-step --flow flows/main.ygtc \
 
 **Remote component (OCI registry):**
 ```bash
-greentic-flow add-step --flow flows/main.ygtc \
+greentic flow add-step --flow flows/main.ygtc \
   --node-id templates \
   --operation handle_message \
   --payload '{"input":"hi"}' \
@@ -76,7 +182,7 @@ greentic-flow add-step --flow flows/main.ygtc \
 
 **Config mode (uses dev_flows for schema-valid payloads):**
 ```bash
-greentic-flow add-step --flow flows/main.ygtc --mode config \
+greentic flow add-step --flow flows/main.ygtc --mode config \
   --node-id hello-world \
   --component oci://ghcr.io/greentic-ai/components/hello-world:latest --pin \
   --after start
@@ -113,7 +219,7 @@ greentic-flow add-step --flow flows/main.ygtc --mode config \
 Re-materialise an existing node using its sidecar binding:
 
 ```bash
-greentic-flow update-step --flow flows/main.ygtc --step hello \
+greentic flow update-step --flow flows/main.ygtc --step hello \
   --answers '{"input":"hi again"}' --routing-reply
 ```
 
@@ -124,7 +230,7 @@ Prefills with current payload, merges answers, and preserves routing unless over
 Remove a node and optionally splice predecessors to its routing:
 
 ```bash
-greentic-flow delete-step --flow flows/main.ygtc --step mid \
+greentic flow delete-step --flow flows/main.ygtc --step mid \
   [--strategy splice|remove-only] \
   [--if-multiple-predecessors error|splice-all] \
   [--assume-yes] [--write]
@@ -137,7 +243,7 @@ Default `splice` rewires predecessors to the deleted node's routes. Also removes
 Attach or repair a sidecar mapping without changing flow content:
 
 ```bash
-greentic-flow bind-component --flow flows/main.ygtc --step hello \
+greentic flow bind-component --flow flows/main.ygtc --step hello \
   --local-wasm components/hello-world/target/wasm32-wasip2/release/hello_world.wasm \
   [--pin] [--write]
 ```
@@ -150,10 +256,10 @@ Validate flows against the embedded schema and optional adapter registry:
 
 ```bash
 # Validate all flows in a directory
-greentic-flow doctor flows/
+greentic flow doctor flows/
 
 # Validate a single flow with JSON output
-greentic-flow doctor --json --stdin < flows/main.ygtc
+greentic flow doctor --json --stdin < flows/main.ygtc
 ```
 
 **Options:**
@@ -171,7 +277,7 @@ The doctor command also:
 Emit JSON Schema and example answers for a component operation:
 
 ```bash
-greentic-flow answers --component <oci|path> --operation <op> \
+greentic flow answers --component <oci|path> --operation <op> \
   --name <prefix> [--out-dir <dir>] [--mode default|config]
 ```
 
@@ -182,14 +288,14 @@ Writes `<prefix>.schema.json` and `<prefix>.example.json`.
 Validate answers JSON against a schema:
 
 ```bash
-greentic-flow doctor-answers --schema answers.schema.json --answers answers.json [--json]
+greentic flow doctor-answers --schema answers.schema.json --answers answers.json [--json]
 ```
 
 Exits 0 when valid, exits 1 with validation errors.
 
 ---
 
-## greentic-component
+## greentic component
 
 Manage WebAssembly components.
 
@@ -198,7 +304,7 @@ Manage WebAssembly components.
 Scaffold a new component:
 
 ```bash
-greentic-component new --name my-component --org ai.greentic --path ./components
+greentic component new --name my-component --org ai.greentic --path ./components
 ```
 
 **Options:**
@@ -223,7 +329,7 @@ cargo build --target wasm32-wasip2 --release
 Validate a component structure and manifest:
 
 ```bash
-greentic-component validate --path ./my-component
+greentic component validate --path ./my-component
 ```
 
 ### test
@@ -231,12 +337,12 @@ greentic-component validate --path ./my-component
 Run component tests:
 
 ```bash
-greentic-component test --path ./my-component [--filter "test_*"]
+greentic component test --path ./my-component [--filter "test_*"]
 ```
 
 ---
 
-## greentic-pack
+## greentic pack
 
 Manage Greentic packs (signed bundles of flows and components).
 
@@ -245,7 +351,7 @@ Manage Greentic packs (signed bundles of flows and components).
 Build a pack from flows and components:
 
 ```bash
-greentic-pack build --in ./project --gtpack-out dist/my-pack.gtpack
+greentic pack build --in ./project --gtpack-out dist/my-pack.gtpack
 ```
 
 **Options:**
@@ -262,7 +368,7 @@ greentic-pack build --in ./project --gtpack-out dist/my-pack.gtpack
 Inspect pack contents:
 
 ```bash
-greentic-pack inspect --pack my-pack.gtpack [--json] [--extract <DIR>]
+greentic pack inspect --pack my-pack.gtpack [--json] [--extract <DIR>]
 ```
 
 ### sign
@@ -270,7 +376,7 @@ greentic-pack inspect --pack my-pack.gtpack [--json] [--extract <DIR>]
 Sign an existing pack:
 
 ```bash
-greentic-pack sign --pack my-pack.gtpack --key key.pem --cert cert.pem
+greentic pack sign --pack my-pack.gtpack --key key.pem --cert cert.pem
 ```
 
 ### verify
@@ -278,12 +384,12 @@ greentic-pack sign --pack my-pack.gtpack --key key.pem --cert cert.pem
 Verify pack signature:
 
 ```bash
-greentic-pack verify --pack my-pack.gtpack [--trusted-certs <DIR>]
+greentic pack verify --pack my-pack.gtpack [--trusted-certs <DIR>]
 ```
 
 ---
 
-## greentic-dev
+## greentic dev
 
 Local development server for testing flows and packs.
 
@@ -292,7 +398,7 @@ Local development server for testing flows and packs.
 Run a pack locally:
 
 ```bash
-greentic-dev pack run --pack dist/my-pack.gtpack [--mocks on|off]
+greentic dev pack run --pack dist/my-pack.gtpack [--mocks on|off]
 ```
 
 **Options:**
@@ -306,7 +412,7 @@ greentic-dev pack run --pack dist/my-pack.gtpack [--mocks on|off]
 
 ## Sidecar Files
 
-When you use `greentic-flow` commands, a sidecar file (`<flow>.ygtc.resolve.json`) is maintained alongside your flow file. This tracks:
+When you use `greentic flow` commands, a sidecar file (`<flow>.ygtc.resolve.json`) is maintained alongside your flow file. This tracks:
 
 - **Node bindings** — Which component (local or remote) backs each node
 - **Digests** — Pinned hashes for reproducible builds
@@ -341,8 +447,9 @@ Example sidecar:
 
 | Variable | Description |
 |----------|-------------|
+| `GREENTIC_TOKEN` | Authentication token for the Greentic store (created by `greentic init`) |
 | `GREENTIC_CONFIG` | Config file path (`~/.greentic/config.toml`) |
-| `RUST_LOG` | Log level (e.g., `greentic_flow=info`) |
+| `RUST_LOG` | Log level (e.g., `greentic=info`) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Telemetry endpoint |
 
 ---
@@ -356,7 +463,7 @@ Run validation in CI pipelines:
 cargo fmt && cargo clippy --all-targets -- -D warnings && cargo test
 
 # Validate all flows
-greentic-flow doctor flows/
+greentic flow doctor flows/
 ```
 
 ---

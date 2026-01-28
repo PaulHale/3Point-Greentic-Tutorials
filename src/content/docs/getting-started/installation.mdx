@@ -32,28 +32,34 @@ rustup target add wasm32-wasip2
 
 ## Install the CLI
 
-The `greentic-dev` CLI is your primary tool for developing digital workers.
-
-### From Source
-
-Clone the repository and build:
+Install Greentic via Cargo:
 
 ```bash
-git clone https://github.com/greentic-ai/greentic.git
-cd greentic/greentic-dev
-cargo install --path crates/greentic-dev
+cargo install greentic
 ```
+
+### Initialize Your Environment
+
+Run the init command to set up your environment:
+
+```bash
+greentic init
+```
+
+This command:
+- Creates configuration directories (~/.greentic/)
+- Registers your user account
+- Generates a `GREENTIC_TOKEN` for accessing the Greentic store
 
 ### Verify Installation
 
 ```bash
-greentic-dev --version
-# greentic-dev 0.1.0
+greentic --version
 ```
 
-## Configure Your Environment
+## Configuration
 
-Create a configuration file at `~/.greentic/config.toml`:
+The `greentic init` command creates a default configuration at `~/.greentic/config.toml`. You can customize it as needed:
 
 ```toml
 [telemetry]
@@ -95,19 +101,19 @@ docker run -d \
 Run the verification command to check everything is working:
 
 ```bash
-greentic-dev doctor
+greentic doctor
 ```
 
 You should see output like:
 
 ```
-Checking Greentic development environment...
+Checking Greentic environment...
 
 ✓ Rust toolchain: 1.85.0
 ✓ Wasm target: wasm32-wasip2
-✓ greentic-dev: 0.1.0
+✓ greentic: installed
 ✓ Config file: ~/.greentic/config.toml
-✓ Telemetry: enabled
+✓ GREENTIC_TOKEN: configured
 
 All checks passed! Ready to build digital workers.
 ```
@@ -127,15 +133,15 @@ rustup target add wasm32-wasip2
 On macOS/Linux, you may need to adjust permissions:
 
 ```bash
-chmod +x ~/.cargo/bin/greentic-dev
+chmod +x ~/.cargo/bin/greentic
 ```
 
 ### Config File Issues
 
-Ensure your config file has valid TOML syntax. Use a validator:
+Ensure your config file has valid TOML syntax. Run the doctor command to validate:
 
 ```bash
-greentic-dev config validate
+greentic doctor
 ```
 
 ## Next Steps

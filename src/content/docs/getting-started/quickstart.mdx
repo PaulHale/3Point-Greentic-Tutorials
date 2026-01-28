@@ -40,7 +40,7 @@ nodes:
 Before running, validate your flow to catch any errors:
 
 ```bash
-greentic-dev flow validate -f echo.ygtc
+greentic flow validate echo.ygtc
 ```
 
 You should see:
@@ -54,10 +54,10 @@ You should see:
 
 ## Run Locally
 
-Start the local development server:
+Start the flow:
 
 ```bash
-greentic-dev flow run -f echo.ygtc
+greentic run
 ```
 
 This starts an interactive console where you can test your flow:
@@ -113,7 +113,7 @@ nodes:
 Run again to see the multi-step conversation:
 
 ```bash
-greentic-dev flow run -f echo.ygtc
+greentic run
 ```
 
 ```
@@ -132,7 +132,7 @@ You asked: What's the weather like?
 When you're ready to distribute your worker, build it into a pack:
 
 ```bash
-greentic-dev pack build -f echo.ygtc -o dist/echo.gtpack
+greentic pack build --in . --gtpack-out dist/echo.gtpack
 ```
 
 This creates a signed, versioned bundle that can be deployed anywhere.
